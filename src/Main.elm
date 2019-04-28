@@ -34,23 +34,28 @@ recruitedNodeState : String -> NodeState
 recruitedNodeState name =
     { name = name, status = Recruited }
 
-testGraph2 =
-    Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
-        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
-        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6", unrecruitedNodeState "r" ]
-        [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
-
-
 testGraph =
     Graph.fromNodeLabelsAndEdgePairs
         [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
         , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
         , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
         , recruitedNodeState "r" ]
+        [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
+
+
+testGraph2 =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
+        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
+        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
+        , recruitedNodeState "r" ]
         [  ]
+-- setStatusInEntity  { n | name = n.value.name, status = status }
+-- { n | value = n.value }
 
-
+setStatus : Int -> Status -> Graph Entity () -> Graph Entity ()
+setStatus  nodeIndex status graph =
+    Graph.mapNodes (\n -> if n.id == nodeIndex then { n | value = { name = n.value.name, status = status }}  else n) graph
 
 main : Program () Model Msg
 main =
@@ -63,6 +68,7 @@ main =
 
 type Msg
     = DragStart NodeId ( Float, Float )
+    | MouseClick  NodeId ( Float, Float )
     | DragAt ( Float, Float )
     | DragEnd ( Float, Float )
     | Tick Time.Posix
@@ -72,6 +78,7 @@ type alias Model =
     { drag : Maybe Drag
     , graph : Graph Entity ()
     , simulation : Force.State NodeId
+    , message : String
     }
 
 
@@ -114,7 +121,7 @@ init _ =
             , Force.center (500 / 2) (500 / 2)
             ]
     in
-        ( Model Nothing graph (Force.simulation forces), Cmd.none )
+        ( Model Nothing graph (Force.simulation forces) "No message yet", Cmd.none )
 
 
 updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
@@ -145,7 +152,7 @@ updateGraphWithList =
 
 
 update : Msg -> Model -> Model
-update msg ({ drag, graph, simulation } as model) =
+update msg ({ drag, graph, simulation, message } as model) =
     case msg of
         Tick t ->
             let
@@ -154,7 +161,7 @@ update msg ({ drag, graph, simulation } as model) =
             in
                 case drag of
                     Nothing ->
-                        Model drag (updateGraphWithList graph list) newState
+                        Model drag (updateGraphWithList graph list) newState message
 
                     Just { current, index } ->
                         Model drag
@@ -162,30 +169,34 @@ update msg ({ drag, graph, simulation } as model) =
                                 (Maybe.map (updateNode current))
                                 (updateGraphWithList graph list)
                             )
-                            newState
+                            newState message
 
         DragStart index xy ->
-            Model (Just (Drag xy xy index)) graph simulation
+            Model (Just (Drag xy xy index)) graph simulation message
+
+
+        MouseClick index xy ->
+                    { model | message = "Node " ++ String.fromInt index
+                              , graph = setStatus  index Recruited  model.graph }
 
         DragAt xy ->
             case drag of
                 Just { start, index } ->
                     Model (Just (Drag start xy index))
                         (Graph.update index (Maybe.map (updateNode xy)) graph)
-                        (Force.reheat simulation)
-
+                        (Force.reheat simulation) message
                 Nothing ->
-                    Model Nothing graph simulation
+                    Model Nothing graph simulation message
 
         DragEnd xy ->
             case drag of
                 Just { start, index } ->
                     Model Nothing
                         (Graph.update index (Maybe.map (updateNode xy)) graph)
-                        simulation
+                        simulation message
 
                 Nothing ->
-                    Model Nothing graph simulation
+                    Model Nothing graph simulation message
 
 
 subscriptions : Model -> Sub Msg
@@ -209,7 +220,11 @@ subscriptions model =
 
 onMouseDown : NodeId -> Attribute Msg
 onMouseDown index =
-    Mouse.onDown (.clientPos >> DragStart index)
+    Mouse.onDown (.clientPos >> MouseClick index)
+
+onMouseClick : NodeId -> Attribute Msg
+onMouseClick index =
+    Mouse.onClick (.clientPos >> MouseClick index)
 
 linkElement : Graph (Force.Entity Int { value : NodeState }) e
                     -> { a | from : Graph.NodeId, to : Graph.NodeId }
@@ -266,10 +281,11 @@ view model =
 
 mainColumn : Model -> Element Msg
 mainColumn model =
-    row [ spacing 24, centerX, centerY ] [
-         leftPanel model
-       , rightPanel model
-
+    column [spacing 12 , centerX, centerY] [
+       row [ spacing 24 ] [
+           leftPanel model
+         , rightPanel model ]
+       , el [Font.size 14] (text model.message)
       ]
 
 leftPanel : Model -> Element Msg
