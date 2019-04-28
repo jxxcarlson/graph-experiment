@@ -1,4 +1,4 @@
-module Main exposing (main, initializeNode)
+module Main exposing (main, initializeNode, linkElement, nodeElement)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -9,28 +9,33 @@ import Browser.Events
 import Color
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
-import Html
-import Html.Events exposing (on)
+import Element exposing (..)
+import Element.Background as Background
+import Element.Font as Font
+import Element.Input as Input
+import Element.Border as Border
+import Html exposing(Html)
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as Decode
-import SampleData exposing (miserablesGraph, testGraph)
+import SampleData exposing (testGraph)
 import Time
 import TypedSvg exposing (circle, g, line, svg, title, text_)
 import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, fontSize, transform)
 import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2)
-import TypedSvg.Core exposing (Attribute, Svg, text)
+import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 
 
-w : Float
-w =
-    990
 
 
-h : Float
-h =
-    504
-
+main : Program () Model Msg
+main =
+    Browser.element
+        { init = init
+        , view = view
+        , update = \msg model -> ( update msg model, Cmd.none )
+        , subscriptions = subscriptions
+        }
 
 type Msg
     = DragStart NodeId ( Float, Float )
@@ -52,6 +57,9 @@ type alias Drag =
     , index : NodeId
     }
 
+type alias NodeState = { label: String, status: Status }
+
+type Status = Recruited | NotRecruited
 
 type alias Entity =
     Force.Entity NodeId { value : String }
@@ -77,7 +85,7 @@ init _ =
         forces =
             [ Force.links <| List.map link <| Graph.edges graph
             , Force.manyBody <| List.map .id <| Graph.nodes graph
-            , Force.center (w / 2) (h / 2)
+            , Force.center (500 / 2) (500 / 2)
             ]
     in
         ( Model Nothing graph (Force.simulation forces), Cmd.none )
@@ -177,7 +185,9 @@ onMouseDown : NodeId -> Attribute Msg
 onMouseDown index =
     Mouse.onDown (.clientPos >> DragStart index)
 
-
+linkElement : Graph (Force.Entity Int { value : String }) e
+                    -> { a | from : Graph.NodeId, to : Graph.NodeId }
+                    -> Svg msg
 linkElement graph edge =
     let
         source =
@@ -197,6 +207,7 @@ linkElement graph edge =
             []
 
 
+nodeElement : Node { a | value : String, x : Float, y : Float } -> Svg Msg
 nodeElement node =
     g []
         [ circle
@@ -208,25 +219,47 @@ nodeElement node =
             , cx node.label.x
             , cy node.label.y
             ]
-            [ title [] [ text node.label.value ] ]
+            [ title [] [ Svg.text node.label.value ] ]
         , text_
             [ transform [ Translate (node.label.x - 4) (node.label.y + 1) ]
             , (fontSize (Px 8))
             , stroke (Color.rgba 1 1 1 1)
             ]
-            [ text node.label.value ]
+            [ Svg.text node.label.value ]
         ]
 
+--
+-- VIEW
+--
 
 
--- SA.transform <| "translate(0," ++ dy ++ ") scale(1,-1)"
---, SA.x <| String.fromFloat -30
---, SA.y <| "0"
---, SA.fontSize "9px"]
-
-
-view : Model -> Svg Msg
+view : Model -> Html Msg
 view model =
+    Element.layout [] (mainColumn model)
+
+
+mainColumn : Model -> Element Msg
+mainColumn model =
+    row [ spacing 24, centerX, centerY ] [
+         leftPanel model
+       , rightPanel model
+
+      ]
+
+leftPanel : Model -> Element Msg
+leftPanel model =
+    column [spacing 12, width (px 500)] [
+       el [] (text "GRAPH")
+    ]
+
+rightPanel : Model -> Element Msg
+rightPanel model =
+    column [spacing 12, width (px 500), Border.width 1] [
+      viewGraph model  500 500 |> Element.html
+    ]
+
+viewGraph : Model -> Float -> Float -> Html Msg
+viewGraph model w h =
     svg [ viewBox 0 0 w h ]
         [ Graph.edges model.graph
             |> List.map (linkElement model.graph)
@@ -237,14 +270,7 @@ view model =
         ]
 
 
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = \msg model -> ( update msg model, Cmd.none )
-        , subscriptions = subscriptions
-        }
+
 
 
 
