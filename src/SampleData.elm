@@ -4,7 +4,6 @@ module SampleData exposing (testGraph)
 import Graph
 
 
-
 testGraph =
     Graph.fromNodeLabelsAndEdgePairs
         [ "p1", "p2", "p3", "p4", "p5", "p6", "q1", "q2", "q3", "q4", "q5", "q6", "r" ]

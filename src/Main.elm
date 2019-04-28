@@ -17,7 +17,6 @@ import Element.Border as Border
 import Html exposing(Html)
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as Decode
-import SampleData exposing (testGraph)
 import Time
 import TypedSvg exposing (circle, g, line, svg, title, text_)
 import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, fontSize, transform)
@@ -25,6 +24,31 @@ import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 
+
+
+unrecruitedNodeState : String -> NodeState
+unrecruitedNodeState name =
+    { name = name, status = NotRecruited }
+
+recruitedNodeState : String -> NodeState
+recruitedNodeState name =
+    { name = name, status = Recruited }
+
+testGraph2 =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
+        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
+        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6", unrecruitedNodeState "r" ]
+        [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
+
+
+testGraph =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
+        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
+        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
+        , recruitedNodeState "r" ]
+        [  ]
 
 
 
@@ -57,15 +81,17 @@ type alias Drag =
     , index : NodeId
     }
 
-type alias NodeState = { label: String, status: Status }
+type alias NodeState = { name: String, status: Status }
 
 type Status = Recruited | NotRecruited
 
 type alias Entity =
-    Force.Entity NodeId { value : String }
+    Force.Entity NodeId { value : NodeState }
+
+defaultNodeState = { name = "", status = NotRecruited }
 
 
-initializeNode : NodeContext String () -> NodeContext Entity ()
+initializeNode : NodeContext NodeState () -> NodeContext Entity ()
 initializeNode ctx =
     { node = { label = Force.entity ctx.node.id ctx.node.label, id = ctx.node.id }
     , incoming = ctx.incoming
@@ -185,16 +211,16 @@ onMouseDown : NodeId -> Attribute Msg
 onMouseDown index =
     Mouse.onDown (.clientPos >> DragStart index)
 
-linkElement : Graph (Force.Entity Int { value : String }) e
+linkElement : Graph (Force.Entity Int { value : NodeState }) e
                     -> { a | from : Graph.NodeId, to : Graph.NodeId }
                     -> Svg msg
 linkElement graph edge =
     let
         source =
-            Maybe.withDefault (Force.entity 0 "") <| Maybe.map (.node >> .label) <| Graph.get edge.from graph
+            Maybe.withDefault (Force.entity 0 defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.from graph
 
         target =
-            Maybe.withDefault (Force.entity 0 "") <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
+            Maybe.withDefault (Force.entity 0 defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
     in
         line
             [ strokeWidth 1
@@ -207,25 +233,25 @@ linkElement graph edge =
             []
 
 
-nodeElement : Node { a | value : String, x : Float, y : Float } -> Svg Msg
+nodeElement : Node { a | value : NodeState, x : Float, y : Float } -> Svg Msg
 nodeElement node =
     g []
         [ circle
-            [ r 9.0
-            , fill (Fill (Color.rgba 0.3 0 1 1.0))
+            [ r 14.0
+            , if node.label.value.status == NotRecruited then  fill (Fill (Color.rgba 0.3 0 1 1.0)) else  fill (Fill (Color.rgba 1.0 0 0.3 1.0))
             , stroke (Color.rgba 0 0 0 0)
             , strokeWidth 7
             , onMouseDown node.id
             , cx node.label.x
             , cy node.label.y
             ]
-            [ title [] [ Svg.text node.label.value ] ]
+            [ title [] [ Svg.text node.label.value.name ] ]
         , text_
-            [ transform [ Translate (node.label.x - 4) (node.label.y + 1) ]
-            , (fontSize (Px 8))
+            [ transform [ Translate (node.label.x - 6) (node.label.y + 3) ]
+            , (fontSize (Px 12))
             , stroke (Color.rgba 1 1 1 1)
             ]
-            [ Svg.text node.label.value ]
+            [ Svg.text node.label.value.name ]
         ]
 
 --
