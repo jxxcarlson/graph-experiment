@@ -267,6 +267,9 @@ leftPanel model =
     column [spacing 12, width (px 500), padding 40, Border.width 1] [
        el [alignTop] (text "SIMULATION")
       , el [] (text "EXPERIMENTAL WORK IN PROGRESS")
+      ,  el [Font.size 14] (text "Click on nodes to 'recruit' them.")
+      ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
+      ,  el [Font.size 14] (text "Why?")
        , el [Font.size 14, alignBottom] (text model.message)
     ]
 
