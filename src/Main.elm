@@ -1,4 +1,4 @@
-module Main exposing (main, initializeNode, linkElement, nodeElement)
+module Main exposing (main, initializeNode, smallGraph, testGraph, connect)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -13,6 +13,7 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
 import Element.Input as Input
+import IntDict
 import Element.Border as Border
 import Html exposing(Html)
 import Html.Events.Extra.Mouse as Mouse
@@ -34,7 +35,7 @@ recruitedNodeState : String -> NodeState
 recruitedNodeState name =
     { name = name, status = Recruited }
 
-testGraph =
+testGraph2 =
     Graph.fromNodeLabelsAndEdgePairs
         [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
         , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
@@ -43,12 +44,17 @@ testGraph =
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
 
-testGraph2 =
+testGraph =
     Graph.fromNodeLabelsAndEdgePairs
         [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
         , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
         , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
         , recruitedNodeState "r" ]
+        [  ]
+
+smallGraph =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2"]
         [  ]
 -- setStatusInEntity  { n | name = n.value.name, status = status }
 -- { n | value = n.value }
@@ -56,6 +62,11 @@ testGraph2 =
 setStatus : Int -> Status -> Graph Entity () -> Graph Entity ()
 setStatus  nodeIndex status graph =
     Graph.mapNodes (\n -> if n.id == nodeIndex then { n | value = { name = n.value.name, status = status }}  else n) graph
+
+--connectNodes : Int -> Int -> Graph Entity () -> Graph Entity ()
+--connectNodes from to graph =
+--   Graph.mapEdges
+
 
 main : Program () Model Msg
 main =
@@ -141,6 +152,27 @@ updateContextWithValue nodeCtx value =
     in
         { nodeCtx | node = { node | label = value } }
 
+-- Maybe.map (\x -> { x | outgoing = I.insert 1 () x.outgoing} ) (G.get 0 g)
+
+newContext: NodeId -> NodeId -> Graph Entity () -> Maybe (NodeContext Entity ())
+newContext from to graph =
+    Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing} ) (Graph.get from graph)
+
+
+connect: NodeId -> NodeId -> Graph Entity () -> Graph Entity ()
+connect from to graph =
+    case newContext from to graph of
+        Nothing -> graph
+        Just ctx -> Graph.insert ctx graph
+
+--addNodeToContext : NodeId -> NodeId -> NodeContext Entity ()  -> NodeContext Entity ()
+--addNodeToContext from to nodeCtx =
+--    let
+--        node =
+--            nodeCtx.node
+--    in
+--        { nodeCtx | outgoing = IntDict.insert from to nodeCtx.outgoing}
+
 
 updateGraphWithList : Graph Entity () -> List Entity -> Graph Entity ()
 updateGraphWithList =
@@ -177,7 +209,7 @@ update msg ({ drag, graph, simulation, message } as model) =
 
         MouseClick index xy ->
                     { model | message = "Node " ++ String.fromInt index
-                              , graph = setStatus  index Recruited  model.graph }
+                              , graph = setStatus  index Recruited  model.graph |> connect 12 index }
 
         DragAt xy ->
             case drag of
