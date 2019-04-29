@@ -54,6 +54,7 @@ type Msg
 type alias Model =
     { drag : Maybe Drag
     , graph : Graph Entity ()
+    , hiddenGraph : Graph Entity ()
     , simulation : Force.State NodeId
     , message : String
     }
@@ -72,6 +73,8 @@ init _ =
         graph =
             Graph.mapContexts Network.initializeNode Network.testGraph
 
+        hiddenGraph =  Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
+
         link { from, to } =
             ( from, to )
 
@@ -81,7 +84,7 @@ init _ =
             , Force.center (500 / 2) (500 / 2)
             ]
     in
-        ( Model Nothing graph (Force.simulation forces) "No message yet", Cmd.none )
+        ( Model Nothing graph hiddenGraph (Force.simulation forces) "No message yet", Cmd.none )
 
 
 updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
@@ -113,7 +116,7 @@ updateGraphWithList =
 
 
 update : Msg -> Model -> Model
-update msg ({ drag, graph, simulation, message } as model) =
+update msg ({ drag, graph, hiddenGraph, simulation, message } as model) =
     case msg of
         Tick t ->
             let
@@ -122,7 +125,7 @@ update msg ({ drag, graph, simulation, message } as model) =
             in
                 case drag of
                     Nothing ->
-                        Model drag (updateGraphWithList graph list) newState message
+                        Model drag (updateGraphWithList graph list) hiddenGraph newState message
 
                     Just { current, index } ->
                         Model drag
@@ -130,34 +133,45 @@ update msg ({ drag, graph, simulation, message } as model) =
                                 (Maybe.map (updateNode current))
                                 (updateGraphWithList graph list)
                             )
-                            newState message
+                            hiddenGraph newState message
 
         DragStart index xy ->
-            Model (Just (Drag xy xy index)) graph simulation message
+            Model (Just (Drag xy xy index)) graph hiddenGraph simulation message
 
 
         MouseClick index xy ->
+            let
+                associatedIncomingNodeIds = (Network.inComingNodeIds index model.hiddenGraph)
+                associatedOutgoingNodeIds = (Network.outGoingNodeIds index model.hiddenGraph)
+            in
                     { model | message = "Node " ++ String.fromInt index
-                              , graph = Network.setStatus  index Recruited  model.graph |> Network.connect 12 index }
+                              , graph =
+                                 Network.setStatus  index Recruited  model.graph
+                                 |> Network.connect 12 index
+                                 |> Network.connectNodeToNodeInList 12 associatedOutgoingNodeIds
+                            }
+
+
 
         DragAt xy ->
             case drag of
                 Just { start, index } ->
                     Model (Just (Drag start xy index))
                         (Graph.update index (Maybe.map (updateNode xy)) graph)
+                        hiddenGraph
                         (Force.reheat simulation) message
                 Nothing ->
-                    Model Nothing graph simulation message
+                    Model Nothing graph hiddenGraph simulation message
 
         DragEnd xy ->
             case drag of
                 Just { start, index } ->
                     Model Nothing
                         (Graph.update index (Maybe.map (updateNode xy)) graph)
-                        simulation message
+                        hiddenGraph simulation message
 
                 Nothing ->
-                    Model Nothing graph simulation message
+                    Model Nothing graph hiddenGraph simulation message
 
 
 subscriptions : Model -> Sub Msg
@@ -246,13 +260,14 @@ mainColumn model =
        row [ spacing 24 ] [
            leftPanel model
          , rightPanel model ]
-       , el [Font.size 14] (text model.message)
       ]
 
 leftPanel : Model -> Element Msg
 leftPanel model =
-    column [spacing 12, width (px 500)] [
-       el [] (text "GRAPH")
+    column [spacing 12, width (px 500), padding 40, Border.width 1] [
+       el [alignTop] (text "SIMULATION")
+      , el [] (text "EXPERIMENTAL WORK IN PROGRESS")
+       , el [Font.size 14, alignBottom] (text model.message)
     ]
 
 rightPanel : Model -> Element Msg

@@ -1,4 +1,6 @@
-module Network exposing (Entity, Status(..), NodeState, defaultNodeState, connect, setStatus, testGraph, initializeNode, updateContextWithValue)
+module Network exposing (Entity, Status(..), NodeState, defaultNodeState, connect, setStatus
+  , hiddenTestGraph, testGraph, initializeNode, updateContextWithValue, outGoingNodeIds, inComingNodeIds
+  , connectNodeToNodeInList)
 
 
 import Force exposing (State)
@@ -33,7 +35,7 @@ recruitedNodeState : String -> NodeState
 recruitedNodeState name =
     { name = name, status = Recruited }
 
-testGraph2 =
+hiddenTestGraph =
     Graph.fromNodeLabelsAndEdgePairs
         [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
         , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
@@ -82,3 +84,21 @@ connect from to graph =
     case newContext from to graph of
         Nothing -> graph
         Just ctx -> Graph.insert ctx graph
+
+connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity () -> Graph Entity ()
+connectNodeToNodeInList from nodeList graph =
+    List.foldl (\to graph_ -> connect from to graph_) graph nodeList
+
+
+outGoingNodeIds : NodeId -> Graph Entity () -> List NodeId
+outGoingNodeIds nodeId graph =
+    case Graph.get nodeId graph of
+        Nothing -> []
+        Just ctx -> ctx.outgoing |> IntDict.keys
+
+
+inComingNodeIds : NodeId -> Graph Entity () -> List NodeId
+inComingNodeIds nodeId graph =
+    case Graph.get nodeId graph of
+        Nothing -> []
+        Just ctx -> ctx.incoming |> IntDict.keys
