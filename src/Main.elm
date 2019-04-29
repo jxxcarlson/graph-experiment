@@ -142,7 +142,7 @@ update msg ({ drag, graph, hiddenGraph, simulation, message } as model) =
         MouseClick index xy ->
             let
                 associatedIncomingNodeIds = (Network.inComingNodeIds index model.hiddenGraph)
-                associatedOutgoingNodeIds = (Network.outGoingNodeIds index model.hiddenGraph)
+                associatedOutgoingNodeIds =  (Network.outGoingNodeIds index model.hiddenGraph)
             in
                     { model | message = "Node " ++ String.fromInt index
                               , graph =
