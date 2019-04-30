@@ -43,18 +43,32 @@ main =
         , subscriptions = subscriptions
         }
 
+--
+-- MSG
+--
+
 type Msg
     = DragStart NodeId ( Float, Float )
     | MouseClick  NodeId ( Float, Float )
     | DragAt ( Float, Float )
     | DragEnd ( Float, Float )
     | Tick Time.Posix
+    | SetGraphBehavior GraphBehavior
 
+
+--
+-- MODEL
+--
+
+type GraphBehavior = Selectable | Draggable
 
 type alias Model =
     { drag : Maybe Drag
+    , recruiter : NodeId
+    , clickCount : Int
     , graph : Graph Entity ()
     , hiddenGraph : Graph Entity ()
+    , graphBehavior : GraphBehavior
     , simulation : Force.State NodeId
     , message : String
     }
@@ -84,7 +98,15 @@ init _ =
             , Force.center (500 / 2) (500 / 2)
             ]
     in
-        ( Model Nothing graph hiddenGraph (Force.simulation forces) "No message yet", Cmd.none )
+      ({ drag = Nothing
+      , graph = graph
+      , recruiter = 12
+      , clickCount = 0
+      , hiddenGraph = hiddenGraph
+      , graphBehavior = Selectable
+      , simulation = (Force.simulation forces)
+      , message =  "No message yet"}
+      ,  Cmd.none )
 
 
 updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
@@ -94,16 +116,6 @@ updateNode ( x, y ) nodeCtx =
             nodeCtx.node.label
     in
         Network.updateContextWithValue nodeCtx { nodeValue | x = x, y = y }
-
-
-
---addNodeToContext : NodeId -> NodeId -> NodeContext Entity ()  -> NodeContext Entity ()
---addNodeToContext from to nodeCtx =
---    let
---        node =
---            nodeCtx.node
---    in
---        { nodeCtx | outgoing = IntDict.insert from to nodeCtx.outgoing}
 
 
 updateGraphWithList : Graph Entity () -> List Entity -> Graph Entity ()
@@ -116,27 +128,23 @@ updateGraphWithList =
 
 
 update : Msg -> Model -> Model
-update msg ({ drag, graph, hiddenGraph, simulation, message } as model) =
+update msg model =
     case msg of
         Tick t ->
             let
                 ( newState, list ) =
-                    Force.tick simulation <| List.map .label <| Graph.nodes graph
+                    Force.tick model.simulation <| List.map .label <| Graph.nodes model.graph
             in
-                case drag of
+                case model.drag of
                     Nothing ->
-                        Model drag (updateGraphWithList graph list) hiddenGraph newState message
+                        { model | graph = updateGraphWithList model.graph list,simulation = newState}
 
                     Just { current, index } ->
-                        Model drag
-                            (Graph.update index
-                                (Maybe.map (updateNode current))
-                                (updateGraphWithList graph list)
-                            )
-                            hiddenGraph newState message
+                        { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) )}
+
 
         DragStart index xy ->
-            Model (Just (Drag xy xy index)) graph hiddenGraph simulation message
+            { model | drag = Just (Drag xy xy index) }
 
 
         MouseClick index xy ->
@@ -144,34 +152,35 @@ update msg ({ drag, graph, hiddenGraph, simulation, message } as model) =
                 associatedIncomingNodeIds = (Network.inComingNodeIds index model.hiddenGraph)
                 associatedOutgoingNodeIds =  (Network.outGoingNodeIds index model.hiddenGraph)
             in
-                    { model | message = "Node " ++ String.fromInt index
+                    { model | message = "Clicked node " ++ String.fromInt index
                               , graph =
                                  Network.setStatus  index Recruited  model.graph
-                                 |> Network.connect 12 index
-                                 |> Network.connectNodeToNodeInList 12 associatedOutgoingNodeIds
+                                 |> Network.connect model.recruiter  index
+                                 |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                              , clickCount = model.clickCount + 1
                             }
 
 
 
         DragAt xy ->
-            case drag of
+            case model.drag of
                 Just { start, index } ->
-                    Model (Just (Drag start xy index))
-                        (Graph.update index (Maybe.map (updateNode xy)) graph)
-                        hiddenGraph
-                        (Force.reheat simulation) message
+                    {  model | drag = Just (Drag start xy index)
+                     , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
+                     , simulation = Force.reheat model.simulation  }
                 Nothing ->
-                    Model Nothing graph hiddenGraph simulation message
+                    model
 
         DragEnd xy ->
-            case drag of
+            case model.drag of
                 Just { start, index } ->
-                    Model Nothing
-                        (Graph.update index (Maybe.map (updateNode xy)) graph)
-                        hiddenGraph simulation message
+                    {model | drag = Nothing, graph = Graph.update index (Maybe.map (updateNode xy)) model.graph}
 
                 Nothing ->
-                    Model Nothing graph hiddenGraph simulation message
+                    model
+
+        SetGraphBehavior behavior ->
+             { model | graphBehavior = behavior }
 
 
 subscriptions : Model -> Sub Msg
@@ -195,7 +204,8 @@ subscriptions model =
 
 onMouseDown : NodeId -> Attribute Msg
 onMouseDown index =
-    Mouse.onDown (.clientPos >> MouseClick index)
+    Mouse.onDown (.clientPos >> DragStart index)
+    -- Mouse.onDown (.clientPos >> MouseClick index)
 
 onMouseClick : NodeId -> Attribute Msg
 onMouseClick index =
@@ -223,15 +233,21 @@ linkElement graph edge =
             []
 
 
-nodeElement : Node { a | value : NodeState, x : Float, y : Float } -> Svg Msg
-nodeElement node =
+nodeElement : Model -> Node { a | value : NodeState, x : Float, y : Float } -> Svg Msg
+nodeElement model node =
+    let
+        mouseHandler = case model.graphBehavior of
+            Selectable -> onMouseClick
+            Draggable -> onMouseDown
+
+    in
     g []
         [ circle
             [ r 14.0
             , if node.label.value.status == NotRecruited then  fill (Fill (Color.rgba 0.3 0 1 1.0)) else  fill (Fill (Color.rgba 1.0 0 0.3 1.0))
             , stroke (Color.rgba 0 0 0 0)
             , strokeWidth 7
-            , onMouseDown node.id
+            , mouseHandler node.id
             , cx node.label.x
             , cy node.label.y
             ]
@@ -264,14 +280,48 @@ mainColumn model =
 
 leftPanel : Model -> Element Msg
 leftPanel model =
-    column [spacing 12, width (px 500), padding 40, Border.width 1] [
-       el [alignTop] (text "SIMULATION")
-      , el [] (text "EXPERIMENTAL WORK IN PROGRESS")
-      ,  el [Font.size 14] (text "Click on nodes to 'recruit' them.")
-      ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
-      ,  el [Font.size 14] (text "Why?")
-       , el [Font.size 14, alignBottom] (text model.message)
+    column [spacing 12, width (px 500), padding 40] [
+       infoPanel model
+       , controlPanel model
     ]
+
+infoPanel : Model -> Element Msg
+infoPanel model =
+     column [spacing 12, width (px 450), padding 40, Border.width 1] [
+            el [alignTop] (text "SIMULATION")
+           , el [] (text "EXPERIMENTAL WORK IN PROGRESS")
+           ,  el [Font.size 14] (text "Click on nodes to 'recruit' them.")
+           ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
+           ,  el [Font.size 14] (text "Why?")
+          ]
+
+controlPanel : Model -> Element Msg
+controlPanel model =
+    column [spacing 12, width (px 450), padding 40, Border.width 1, Font.size 16] [
+               scoreIndicator model
+               , row [spacing 12] [
+                  el [] (text <| "Nodes: " ++ (String.fromInt <| Graph.size model.graph))
+                 , el [] (text <| "Recruited nodes: " ++ (String.fromInt  (List.length <| recruitedNodes model)))
+                 , el [] (text <| "Clicks: " ++ String.fromInt model.clickCount)
+                 ]
+             , row [spacing 12] [enableSelectionButton model, enableDragginButton model]
+             ,el [] (text model.message)
+              ]
+
+scoreIndicator : Model -> Element Msg
+scoreIndicator model =
+    let
+        cc = toFloat model.clickCount
+        rn = toFloat <| List.length <| recruitedNodes model
+        score = round <| (10*(2*rn - cc))
+    in
+        el [Font.size 24, Font.bold] (text <| "Score: " ++ String.fromInt score)
+
+
+recruitedNodes : Model -> List NodeId
+recruitedNodes model =
+   Network.outGoingNodeIds model.recruiter model.graph
+
 
 rightPanel : Model -> Element Msg
 rightPanel model =
@@ -286,13 +336,42 @@ viewGraph model w h =
             |> List.map (linkElement model.graph)
             |> g [ class [ "links" ] ]
         , Graph.nodes model.graph
-            |> List.map nodeElement
+            |> List.map (nodeElement model)
             |> g [ class [ "nodes" ] ]
         ]
 
 
 
+--
+-- BUTTONS
+--
 
+enableSelectionButton : Model -> Element Msg
+enableSelectionButton model =
+    Input.button  (buttonStyle [selectedBackground (model.graphBehavior == Selectable)]) {
+        onPress = Just (SetGraphBehavior Selectable)
+      , label = el [] (text  "Select Nodes")
+    }
+
+enableDragginButton : Model -> Element Msg
+enableDragginButton model =
+    Input.button  (buttonStyle [selectedBackground (model.graphBehavior == Draggable)]) {
+        onPress = Just (SetGraphBehavior Draggable)
+      , label = el [] (text "Move Nodes")
+    }
+
+buttonStyle extras =
+    [Border.width 1, padding 8, Border.rounded 4, Font.color white] ++ extras
+
+white = rgb 1 1 1
+charcoal = rgb 0.3 0.3 0.3
+darkRed = rgb 0.6 0 0
+
+
+selectedBackground flag =
+    case flag of
+        True -> Background.color darkRed
+        False -> Background.color charcoal
 
 
 {- {"delay": 5001} -}
