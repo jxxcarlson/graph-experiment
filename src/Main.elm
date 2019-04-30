@@ -54,6 +54,8 @@ type Msg
     | DragEnd ( Float, Float )
     | Tick Time.Posix
     | SetGraphBehavior GraphBehavior
+    | ReHeat
+    | StartOver
 
 
 --
@@ -92,7 +94,7 @@ init _ =
         link { from, to } =
             ( from, to )
 
-        forces =
+        forces = Debug.log "INITIAL FORCES" <|
             [ Force.links <| List.map link <| Graph.edges graph
             , Force.manyBody <| List.map .id <| Graph.nodes graph
             , Force.center (500 / 2) (500 / 2)
@@ -108,6 +110,27 @@ init _ =
       , message =  "No message yet"}
       ,  Cmd.none )
 
+
+-- computeForces : Graph Entity () -> List Force.Force
+computeForces graph =
+    let
+        k = 2.0
+        link { from, to } =
+                    ( from,  to )
+    in
+    Debug.log "RECOMPUTE FORCES" <|
+                [  Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
+                 , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
+                 -- Force.center (500 / 2) (500 / 2)
+                ]
+
+
+alterLink (from, to) =
+    { source = from
+    , target = to
+    , distance = 90
+    , strength = Just 1
+    }
 
 updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
 updateNode ( x, y ) nodeCtx =
@@ -151,12 +174,16 @@ update msg model =
             let
                 associatedIncomingNodeIds = (Network.inComingNodeIds index model.hiddenGraph)
                 associatedOutgoingNodeIds =  (Network.outGoingNodeIds index model.hiddenGraph)
+                newGraph =
+                      Network.setStatus  index Recruited  model.graph
+                         |> Network.connect model.recruiter  index
+                         |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                forces = computeForces newGraph
+
             in
                     { model | message = "Clicked node " ++ String.fromInt index
-                              , graph =
-                                 Network.setStatus  index Recruited  model.graph
-                                 |> Network.connect model.recruiter  index
-                                 |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                              , graph = newGraph
+                              , simulation = (Force.simulation forces)
                               , clickCount = model.clickCount + 1
                             }
 
@@ -165,7 +192,7 @@ update msg model =
         DragAt xy ->
             case model.drag of
                 Just { start, index } ->
-                    {  model | drag = Just (Drag start xy index)
+                    {  model | drag = Debug.log "DRAG" <| Just (Drag start xy index)
                      , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
                      , simulation = Force.reheat model.simulation  }
                 Nothing ->
@@ -181,6 +208,14 @@ update msg model =
 
         SetGraphBehavior behavior ->
              { model | graphBehavior = behavior }
+
+        StartOver ->
+            { model |   graph = Graph.mapContexts Network.initializeNode Network.testGraph
+                      , simulation = Force.reheat model.simulation
+                      , clickCount = 0}
+
+        ReHeat ->
+                    { model |  simulation = Force.reheat model.simulation }
 
 
 subscriptions : Model -> Sub Msg
@@ -304,7 +339,10 @@ controlPanel model =
                  , el [] (text <| "Recruited nodes: " ++ (String.fromInt  (List.length <| recruitedNodes model)))
                  , el [] (text <| "Clicks: " ++ String.fromInt model.clickCount)
                  ]
-             , row [spacing 12] [enableSelectionButton model, enableDragginButton model]
+             -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
+             , row [spacing 12] [startOverButton model
+                                 -- , reheatButton model
+              ]
              ,el [] (text model.message)
               ]
 
@@ -345,6 +383,20 @@ viewGraph model w h =
 --
 -- BUTTONS
 --
+
+startOverButton : Model -> Element Msg
+startOverButton model =
+    Input.button  (buttonStyle [ Background.color charcoal]) {
+        onPress = Just (StartOver)
+      , label = el [] (text  "Start Over")
+    }
+
+reheatButton : Model -> Element Msg
+reheatButton model =
+    Input.button  (buttonStyle [ Background.color charcoal]) {
+        onPress = Just (ReHeat)
+      , label = el [] (text  "Arrange")
+    }
 
 enableSelectionButton : Model -> Element Msg
 enableSelectionButton model =
