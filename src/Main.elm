@@ -110,7 +110,7 @@ setupGraph inputGraph =
             link { from, to } =
                 ( from, to )
 
-            forces = Debug.log "INITIAL FORCES" <|
+            forces = 
                 [ Force.links <| List.map link <| Graph.edges outputGraph
                 , Force.manyBody <| List.map .id <| Graph.nodes outputGraph
                 , Force.center (500 / 2) (500 / 2)
@@ -125,11 +125,10 @@ computeForces graph =
         link { from, to } =
                     ( from,  to )
     in
-    Debug.log "RECOMPUTE FORCES" <|
-                [  Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
-                 , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
-                 ,  Force.center (500 / 2) (500 / 2)
-                ]
+        [  Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
+         , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
+         ,  Force.center (500 / 2) (500 / 2)
+        ]
 
 
 alterLink (from, to) =
@@ -199,7 +198,7 @@ update msg model =
         DragAt xy ->
             case model.drag of
                 Just { start, index } ->
-                    {  model | drag = Debug.log "DRAG" <| Just (Drag start xy index)
+                    {  model | drag = Just (Drag start xy index)
                      , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
                      , simulation = Force.reheat model.simulation  }
                 Nothing ->
@@ -361,7 +360,7 @@ scoreIndicator model =
     let
         cc = toFloat model.clickCount
         rn = toFloat <| List.length <| recruitedNodes model
-        score = round <| (10*(2*rn - cc))
+        score = round <| (30*rn - 20*cc)
     in
         el [Font.size 24, Font.bold] (text <| "Score: " ++ String.fromInt score)
 
