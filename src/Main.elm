@@ -110,7 +110,7 @@ setupGraph inputGraph =
             link { from, to } =
                 ( from, to )
 
-            forces = 
+            forces =
                 [ Force.links <| List.map link <| Graph.edges outputGraph
                 , Force.manyBody <| List.map .id <| Graph.nodes outputGraph
                 , Force.center (500 / 2) (500 / 2)
@@ -333,7 +333,6 @@ infoPanel : Model -> Element Msg
 infoPanel model =
      column [spacing 12, width (px 450), padding 40, Border.width 1] [
             el [alignTop] (text "SIMULATION")
-           , el [] (text "EXPERIMENTAL WORK IN PROGRESS")
            ,  el [Font.size 14] (text "Click on nodes to 'recruit' them.")
            ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
            ,  el [Font.size 14] (text "Why?")
@@ -343,16 +342,17 @@ controlPanel : Model -> Element Msg
 controlPanel model =
     column [spacing 12, width (px 450), padding 40, Border.width 1, Font.size 16] [
                scoreIndicator model
-               , row [spacing 12] [
+               , row [spacing 18] [
                   el [] (text <| "Nodes: " ++ (String.fromInt <| Graph.size model.graph))
-                 , el [] (text <| "Recruited nodes: " ++ (String.fromInt  (List.length <| recruitedNodes model)))
                  , el [] (text <| "Clicks: " ++ String.fromInt model.clickCount)
+                 , el [] (text <| "Recruited: " ++ (String.fromInt  (List.length <| recruitedNodes model)))
+
                  ]
              -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
              , row [spacing 12] [startOverButton model
                                  -- , reheatButton model
               ]
-             ,el [] (text model.message)
+             -- ,el [] (text model.message)
               ]
 
 scoreIndicator : Model -> Element Msg
