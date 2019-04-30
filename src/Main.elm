@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (main, computeForces)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -86,19 +86,8 @@ type alias Drag =
 init : () -> ( Model, Cmd Msg )
 init _ =
     let
-        graph =
-            Graph.mapContexts Network.initializeNode Network.testGraph
-
+        (forces, graph) = setupGraph Network.testGraph
         hiddenGraph =  Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
-
-        link { from, to } =
-            ( from, to )
-
-        forces = Debug.log "INITIAL FORCES" <|
-            [ Force.links <| List.map link <| Graph.edges graph
-            , Force.manyBody <| List.map .id <| Graph.nodes graph
-            , Force.center (500 / 2) (500 / 2)
-            ]
     in
       ({ drag = Nothing
       , graph = graph
@@ -108,10 +97,28 @@ init _ =
       , graphBehavior = Selectable
       , simulation = (Force.simulation forces)
       , message =  "No message yet"}
-      ,  Cmd.none )
+      , Cmd.none )
 
 
--- computeForces : Graph Entity () -> List Force.Force
+setupGraph : Graph.Graph Network.NodeState ()
+             -> ( List (Force.Force Int), Graph.Graph Network.Entity () )
+setupGraph inputGraph =
+    let
+            outputGraph =
+                Graph.mapContexts Network.initializeNode inputGraph
+
+            link { from, to } =
+                ( from, to )
+
+            forces = Debug.log "INITIAL FORCES" <|
+                [ Force.links <| List.map link <| Graph.edges outputGraph
+                , Force.manyBody <| List.map .id <| Graph.nodes outputGraph
+                , Force.center (500 / 2) (500 / 2)
+                ]
+     in
+       (forces, outputGraph)
+
+computeForces : Graph.Graph n e -> List (Force.Force Int)
 computeForces graph =
     let
         k = 2.0
@@ -121,7 +128,7 @@ computeForces graph =
     Debug.log "RECOMPUTE FORCES" <|
                 [  Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
                  , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
-                 -- Force.center (500 / 2) (500 / 2)
+                 ,  Force.center (500 / 2) (500 / 2)
                 ]
 
 
@@ -210,8 +217,11 @@ update msg model =
              { model | graphBehavior = behavior }
 
         StartOver ->
-            { model |   graph = Graph.mapContexts Network.initializeNode Network.testGraph
-                      , simulation = Force.reheat model.simulation
+            let
+                (forces, graph) = setupGraph Network.testGraph
+            in
+            { model |   graph = graph
+                      , simulation = (Force.simulation forces)
                       , clickCount = 0}
 
         ReHeat ->
