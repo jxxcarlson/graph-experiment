@@ -35,7 +35,7 @@ main =
     Browser.element
         { init = init
         , view = view
-        , update = \msg model -> ( update msg model, Cmd.none )
+        , update = \msg model -> update msg model
         , subscriptions = subscriptions
         }
 
@@ -53,6 +53,8 @@ type Msg
     | SetGraphBehavior GraphBehavior
     | ReHeat
     | StartOver
+    | GetRandomNumbers
+    | GotRandomNumbers (List Float)
 
 
 --
@@ -71,6 +73,7 @@ type alias Model =
     , simulation : Force.State NodeId
     , message : String
     , gameClock : Int
+    , randomNumberList : List Float
     }
 
 
@@ -95,7 +98,9 @@ init _ =
       , graphBehavior = Selectable
       , simulation = (Force.simulation forces)
       , message =  "No message yet"
-      , gameClock = 0}
+      , gameClock = 0
+      , randomNumberList = []
+      }
       , Cmd.none )
 
 
@@ -119,8 +124,11 @@ updateGraphWithList =
     in
         List.foldr (\node graph -> Graph.update node.id (graphUpdater node) graph)
 
+putCmd :(Cmd Msg) ->  Model ->  (Model, Cmd Msg)
+putCmd  cmd model =
+    (model, cmd)
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         Tick t ->
@@ -130,15 +138,16 @@ update msg model =
             in
                 case model.drag of
                     Nothing ->
-                        { model | graph = updateGraphWithList model.graph list,simulation = newState}
+                        { model | graph = updateGraphWithList model.graph list,simulation = newState} |> putCmd Cmd.none
 
                     Just { current, index } ->
-                        { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) )}
+                        { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) ) }
+                           |> putCmd Cmd.none
         GameTick t ->
-            { model | gameClock = model.gameClock + 1}
+            { model | gameClock = model.gameClock + 1} |> putCmd Cmd.none
 
         DragStart index xy ->
-            { model | drag = Just (Drag xy xy index) }
+            { model | drag = Just (Drag xy xy index) } |> putCmd Cmd.none
 
 
         MouseClick index xy ->
@@ -156,7 +165,7 @@ update msg model =
                               , graph = newGraph
                               , simulation = (Force.simulation forces)
                               , clickCount = model.clickCount + 1
-                            }
+                            }  |> putCmd Cmd.none
 
 
 
@@ -165,20 +174,20 @@ update msg model =
                 Just { start, index } ->
                     {  model | drag = Just (Drag start xy index)
                      , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
-                     , simulation = Force.reheat model.simulation  }
+                     , simulation = Force.reheat model.simulation  }  |> putCmd Cmd.none
                 Nothing ->
-                    model
+                    model |> putCmd Cmd.none
 
         DragEnd xy ->
             case model.drag of
                 Just { start, index } ->
-                    {model | drag = Nothing, graph = Graph.update index (Maybe.map (updateNode xy)) model.graph}
+                    {model | drag = Nothing, graph = Graph.update index (Maybe.map (updateNode xy)) model.graph}  |> putCmd Cmd.none
 
                 Nothing ->
-                    model
+                    model |> putCmd Cmd.none
 
         SetGraphBehavior behavior ->
-             { model | graphBehavior = behavior }
+             { model | graphBehavior = behavior }  |> putCmd Cmd.none
 
         StartOver ->
             let
@@ -186,10 +195,16 @@ update msg model =
             in
             { model |   graph = graph
                       , simulation = (Force.simulation forces)
-                      , clickCount = 0}
+                      , clickCount = 0}  |> putCmd Cmd.none
 
         ReHeat ->
-                    { model |  simulation = Force.reheat model.simulation }
+                    { model |  simulation = Force.reheat model.simulation }  |> putCmd Cmd.none
+
+        GetRandomNumbers ->
+            ( model, Cmd.none )
+
+        GotRandomNumbers numbers ->
+            ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg

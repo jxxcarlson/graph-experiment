@@ -171,6 +171,11 @@ influencees2 nodeId graph =
    List.map (\n -> influencees n graph) (influencers nodeId graph)
      |> List.concat
      |> List.filter (\x -> x /= nodeId)
+
+
+influencees2b : NodeId -> Graph n e -> List NodeId
+influencees2b nodeId graph =
+    influencees nodeId graph ++ influencees2 nodeId graph
 --
 -- FORCES
 --
