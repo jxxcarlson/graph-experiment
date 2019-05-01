@@ -1,4 +1,4 @@
-module Main exposing (main, computeForces)
+module Main exposing (main)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -27,11 +27,7 @@ import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 
 
-
-
---connectNodes : Int -> Int -> Graph Entity () -> Graph Entity ()
---connectNodes from to graph =
---   Graph.mapEdges
+gameTimeInterval = 1000
 
 
 main : Program () Model Msg
@@ -53,6 +49,7 @@ type Msg
     | DragAt ( Float, Float )
     | DragEnd ( Float, Float )
     | Tick Time.Posix
+    | GameTick Time.Posix
     | SetGraphBehavior GraphBehavior
     | ReHeat
     | StartOver
@@ -73,6 +70,7 @@ type alias Model =
     , graphBehavior : GraphBehavior
     , simulation : Force.State NodeId
     , message : String
+    , gameClock : Int
     }
 
 
@@ -86,7 +84,7 @@ type alias Drag =
 init : () -> ( Model, Cmd Msg )
 init _ =
     let
-        (forces, graph) = setupGraph Network.testGraph
+        (forces, graph) = Network.setupGraph Network.testGraph
         hiddenGraph =  Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
       ({ drag = Nothing
@@ -96,47 +94,13 @@ init _ =
       , hiddenGraph = hiddenGraph
       , graphBehavior = Selectable
       , simulation = (Force.simulation forces)
-      , message =  "No message yet"}
+      , message =  "No message yet"
+      , gameClock = 0}
       , Cmd.none )
 
 
-setupGraph : Graph.Graph Network.NodeState ()
-             -> ( List (Force.Force Int), Graph.Graph Network.Entity () )
-setupGraph inputGraph =
-    let
-            outputGraph =
-                Graph.mapContexts Network.initializeNode inputGraph
-
-            link { from, to } =
-                ( from, to )
-
-            forces =
-                [ Force.links <| List.map link <| Graph.edges outputGraph
-                , Force.manyBody <| List.map .id <| Graph.nodes outputGraph
-                , Force.center (500 / 2) (500 / 2)
-                ]
-     in
-       (forces, outputGraph)
-
-computeForces : Graph.Graph n e -> List (Force.Force Int)
-computeForces graph =
-    let
-        k = 2.0
-        link { from, to } =
-                    ( from,  to )
-    in
-        [  Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
-         , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
-         ,  Force.center (500 / 2) (500 / 2)
-        ]
 
 
-alterLink (from, to) =
-    { source = from
-    , target = to
-    , distance = 90
-    , strength = Just 1
-    }
 
 updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
 updateNode ( x, y ) nodeCtx =
@@ -170,7 +134,8 @@ update msg model =
 
                     Just { current, index } ->
                         { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) )}
-
+        GameTick t ->
+            { model | gameClock = model.gameClock + 1}
 
         DragStart index xy ->
             { model | drag = Just (Drag xy xy index) }
@@ -184,7 +149,7 @@ update msg model =
                       Network.setStatus  index Recruited  model.graph
                          |> Network.connect model.recruiter  index
                          |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
-                forces = computeForces newGraph
+                forces = Network.computeForces newGraph
 
             in
                     { model | message = "Clicked node " ++ String.fromInt index
@@ -217,7 +182,7 @@ update msg model =
 
         StartOver ->
             let
-                (forces, graph) = setupGraph Network.testGraph
+                (forces, graph) = Network.setupGraph Network.testGraph
             in
             { model |   graph = graph
                       , simulation = (Force.simulation forces)
@@ -229,22 +194,26 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.drag of
-        Nothing ->
-            -- This allows us to save resources, as if the simulation is done, there is no point in subscribing
-            -- to the rAF.
-            if Force.isCompleted model.simulation then
-                Sub.none
-            else
-                Browser.Events.onAnimationFrame Tick
+    Sub.batch [simulationSubscription model, Time.every gameTimeInterval GameTick]
 
-        Just _ ->
-            Sub.batch
-                [ Browser.Events.onMouseMove (Decode.map (.clientPos >> DragAt) Mouse.eventDecoder)
-                , Browser.Events.onMouseUp (Decode.map (.clientPos >> DragEnd) Mouse.eventDecoder)
-                , Browser.Events.onAnimationFrame Tick
-                ]
 
+simulationSubscription : Model -> Sub Msg
+simulationSubscription model =
+  case model.drag of
+          Nothing ->
+              -- This allows us to save resources, as if the simulation is done, there is no point in subscribing
+              -- to the rAF.
+              if Force.isCompleted model.simulation then
+                  Sub.none
+              else
+                  Browser.Events.onAnimationFrame Tick
+
+          Just _ ->
+              Sub.batch
+                  [ Browser.Events.onMouseMove (Decode.map (.clientPos >> DragAt) Mouse.eventDecoder)
+                  , Browser.Events.onMouseUp (Decode.map (.clientPos >> DragEnd) Mouse.eventDecoder)
+                  , Browser.Events.onAnimationFrame Tick
+                  ]
 
 onMouseDown : NodeId -> Attribute Msg
 onMouseDown index =
@@ -341,7 +310,8 @@ infoPanel model =
 controlPanel : Model -> Element Msg
 controlPanel model =
     column [spacing 12, width (px 450), padding 40, Border.width 1, Font.size 16] [
-               scoreIndicator model
+               clockIndicator model
+               , scoreIndicator model
                , row [spacing 18] [
                   el [] (text <| "Nodes: " ++ (String.fromInt <| Graph.size model.graph))
                  , el [] (text <| "Clicks: " ++ String.fromInt model.clickCount)
@@ -354,6 +324,11 @@ controlPanel model =
               ]
              -- ,el [] (text model.message)
               ]
+
+
+clockIndicator : Model -> Element Msg
+clockIndicator model =
+   el [Font.size 24, Font.bold] (text <| "Clock: " ++ String.fromInt  model.gameClock)
 
 scoreIndicator : Model -> Element Msg
 scoreIndicator model =
@@ -435,4 +410,3 @@ selectedBackground flag =
         False -> Background.color charcoal
 
 
-{- {"delay": 5001} -}
