@@ -25,9 +25,11 @@ import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, fontSize, tra
 import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2)
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
-
+import Random
+import List.Extra
 
 gameTimeInterval = 1000
+searchForInfluencersInterval = 4
 
 
 main : Program () Model Msg
@@ -52,7 +54,7 @@ type Msg
     | GameTick Time.Posix
     | SetGraphBehavior GraphBehavior
     | ReHeat
-    | StartOver
+    | AdvanceGameState
     | GetRandomNumbers
     | GotRandomNumbers (List Float)
 
@@ -73,9 +75,11 @@ type alias Model =
     , simulation : Force.State NodeId
     , message : String
     , gameClock : Int
+    , gameState : GameState
     , randomNumberList : List Float
     }
 
+type GameState = Ready | Running | Paused | GameOver
 
 type alias Drag =
     { start : ( Float, Float )
@@ -99,6 +103,7 @@ init _ =
       , simulation = (Force.simulation forces)
       , message =  "No message yet"
       , gameClock = 0
+      , gameState = Ready
       , randomNumberList = []
       }
       , Cmd.none )
@@ -144,7 +149,10 @@ update msg model =
                         { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) ) }
                            |> putCmd Cmd.none
         GameTick t ->
-            { model | gameClock = model.gameClock + 1} |> putCmd Cmd.none
+            case model.gameState of
+                Running ->  ({ model | gameClock = model.gameClock + 1} , getRandomNumbers )
+                _ -> (model, getRandomNumbers )
+
 
         DragStart index xy ->
             { model | drag = Just (Drag xy xy index) } |> putCmd Cmd.none
@@ -189,23 +197,66 @@ update msg model =
         SetGraphBehavior behavior ->
              { model | graphBehavior = behavior }  |> putCmd Cmd.none
 
-        StartOver ->
+        AdvanceGameState ->
             let
-                (forces, graph) = Network.setupGraph Network.testGraph
+                newGameState = case model.gameState of
+                    Ready -> Running
+                    Running -> Paused
+                    Paused -> Running
+                    GameOver -> Running
             in
-            { model |   graph = graph
+            case model.gameState of
+                GameOver ->
+                    let
+                       (forces, graph) = Network.setupGraph Network.testGraph
+                    in
+                     { model |   graph = graph
                       , simulation = (Force.simulation forces)
-                      , clickCount = 0}  |> putCmd Cmd.none
+                      , clickCount = 0
+                      , gameClock = 0
+                      , gameState = newGameState }  |> putCmd Cmd.none
+                _ ->
+                     { model | gameState = newGameState }  |> putCmd Cmd.none
 
         ReHeat ->
                     { model |  simulation = Force.reheat model.simulation }  |> putCmd Cmd.none
 
         GetRandomNumbers ->
-            ( model, Cmd.none )
+            ( model, getRandomNumbers )
 
         GotRandomNumbers numbers ->
-            ( model, Cmd.none )
+            let
+                newGraph1 = case model.gameState == Running && modBy searchForInfluencersInterval model.gameClock  == 0 of
+                    True ->  Network.recruitNodes numbers model.recruiter model.graph model.hiddenGraph
+                    False -> model.graph
 
+                newGraph2 = case model.gameState == Running && modBy 41 model.gameClock  == 0  && Network.influencees model.recruiter newGraph1 /= [] of
+                    False -> newGraph1
+                    True ->
+                        let
+                          freeNodes = Network.nodeComplementOfGraph newGraph1
+                             ((Network.influencees model.recruiter newGraph1) ++ [model.recruiter])
+                          rn2 = List.Extra.getAt 2 numbers
+                          freeNode = Network.randomListElement rn2 freeNodes
+                        in
+                        case freeNode of
+                            Nothing -> newGraph1
+                            Just nodeId_ -> Network.connect model.recruiter nodeId_ newGraph1
+
+                newGameState = case List.length (Debug.log "INFL" <| Network.influencees model.recruiter newGraph2) == Graph.size newGraph2 - 1 of
+                    True -> GameOver
+                    False -> model.gameState
+
+
+                _ = Debug.log "newGameState" newGameState
+
+            in
+            ( {model | randomNumberList = numbers, graph = newGraph2, gameState = newGameState}, Cmd.none )
+
+
+getRandomNumbers : Cmd Msg
+getRandomNumbers =
+    Random.generate GotRandomNumbers (Random.list 10 (Random.float 0 1))
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -335,24 +386,46 @@ controlPanel model =
                  ]
              -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
              , row [spacing 12] [startOverButton model
-                                 -- , reheatButton model
+
               ]
-             -- ,el [] (text model.message)
+             ,  influenceesDisplay model, influenceesDisplay2 model
               ]
 
+
+influenceesDisplay : Model -> Element Msg
+influenceesDisplay model =
+    let
+       ii = Network.influencees model.recruiter model.graph
+             |> List.map String.fromInt |> String.join ", "
+    in
+        el [] (text <| "Influencees: " ++ ii)
+
+influenceesDisplay2 : Model -> Element Msg
+influenceesDisplay2 model =
+    let
+       ii = Network.influencees2 4 model.hiddenGraph
+             |> List.map String.fromInt |> String.join ", "
+    in
+        el [] (text <| "Influencees2 of p4: " ++ ii)
 
 clockIndicator : Model -> Element Msg
 clockIndicator model =
-   el [Font.size 24, Font.bold] (text <| "Clock: " ++ String.fromInt  model.gameClock)
+    case model.gameState of
+            GameOver ->
+                 el [Font.size 24, Font.bold] (text <| "Game Over!")
+            _ ->
+               el [Font.size 24, Font.bold] (text <| "Clock: " ++ String.fromInt  model.gameClock)
 
 scoreIndicator : Model -> Element Msg
 scoreIndicator model =
     let
-        cc = toFloat model.clickCount
+        cc = toFloat <| model.clickCount
+        gc = toFloat <| model.gameClock
         rn = toFloat <| List.length <| recruitedNodes model
-        score = round <| (30*rn - 20*cc)
+        score = round <| (30*rn - 20*cc - 2.5*gc)
     in
         el [Font.size 24, Font.bold] (text <| "Score: " ++ String.fromInt score)
+
 
 
 recruitedNodes : Model -> List NodeId
@@ -386,9 +459,19 @@ viewGraph model w h =
 startOverButton : Model -> Element Msg
 startOverButton model =
     Input.button  (buttonStyle [ Background.color charcoal]) {
-        onPress = Just (StartOver)
-      , label = el [] (text  "Start Over")
+        onPress = Just (AdvanceGameState)
+      , label = el [] (text <| controlButtonTitle model)
     }
+
+controlButtonTitle : Model -> String
+controlButtonTitle model =
+    case model.gameState of
+        Ready -> "Ready"
+        Running -> "Running"
+        Paused -> "Paused"
+        GameOver -> "Play again"
+
+
 
 reheatButton : Model -> Element Msg
 reheatButton model =

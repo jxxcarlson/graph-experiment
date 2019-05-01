@@ -1,12 +1,14 @@
 module Network exposing (Entity, Status(..), NodeState, defaultNodeState, connect, setStatus
   , hiddenTestGraph, testGraph, initializeNode, updateContextWithValue, outGoingNodeIds, inComingNodeIds
-  , connectNodeToNodeInList, setupGraph, computeForces, influencees, influencers, influencees2)
+  , connectNodeToNodeInList, setupGraph, computeForces, influencees, influencers, influencees2, recruitNodes,
+  nodeComplementOfGraph, randomListElement)
 
 
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict
 import Maybe.Extra
+import List.Extra
 
 
 --
@@ -37,19 +39,19 @@ recruitedNodeState name =
 
 hiddenTestGraph =
     Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
-        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
-        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
+        [ unrecruitedNodeState "p0", unrecruitedNodeState "12", unrecruitedNodeState "p2", unrecruitedNodeState "p3"
+        , unrecruitedNodeState "p4", unrecruitedNodeState "p5", unrecruitedNodeState "q0", unrecruitedNodeState "q1"
+        , unrecruitedNodeState "q2", unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5"
         , recruitedNodeState "r" ]
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
 
 testGraph =
     Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p1", unrecruitedNodeState "p2", unrecruitedNodeState "p3", unrecruitedNodeState "p4"
-        , unrecruitedNodeState "p5", unrecruitedNodeState "p6", unrecruitedNodeState "q1", unrecruitedNodeState "q2"
-        , unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5", unrecruitedNodeState "q6"
-        , recruitedNodeState "r" ]
+         [ unrecruitedNodeState "p0", unrecruitedNodeState "12", unrecruitedNodeState "p2", unrecruitedNodeState "p3"
+                , unrecruitedNodeState "p4", unrecruitedNodeState "p5", unrecruitedNodeState "q0", unrecruitedNodeState "q1"
+                , unrecruitedNodeState "q2", unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5"
+                , recruitedNodeState "r" ]
         [  ]
 
 defaultNodeState = { name = "", status = NotRecruited }
@@ -173,9 +175,55 @@ influencees2 nodeId graph =
      |> List.filter (\x -> x /= nodeId)
 
 
+
 influencees2b : NodeId -> Graph n e -> List NodeId
 influencees2b nodeId graph =
-    influencees nodeId graph ++ influencees2 nodeId graph
+    influencers nodeId graph ++ influencees2 nodeId graph
+
+scale : Float -> Int -> Int
+scale x n =
+  round(x * (toFloat n))
+
+
+randomListElement : Maybe Float -> List a -> Maybe a
+randomListElement maybeRandomNumber list =
+    case maybeRandomNumber of
+        Nothing -> Nothing
+        Just rn ->
+            let
+              n = List.length list
+              i =  scale rn (n - 1)
+            in
+               List.Extra.getAt i list
+
+
+nodeComplementOfGraph : Graph n e -> List NodeId -> List NodeId
+nodeComplementOfGraph graph nodeExclusionList =
+    Graph.nodeIds graph
+      |> List.Extra.filterNot (\item -> List.member item nodeExclusionList)
+
+
+recruitNodes : List Float -> NodeId -> Graph n () -> Graph n () -> Graph n ()
+recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
+  let
+     randomInfluenceeNodeId : Maybe NodeId
+     randomInfluenceeNodeId =
+        influencees recruiterNode currentGraph
+          |> randomListElement (List.Extra.getAt 0 rnList)
+
+     secondOrderInfluencees : List NodeId
+     secondOrderInfluencees = Maybe.map (\i -> influencees2b i hiddenGraph_) randomInfluenceeNodeId |> Maybe.withDefault []
+
+     randomSecondOrderInfluenceeNodeId : Maybe NodeId
+     randomSecondOrderInfluenceeNodeId =
+        secondOrderInfluencees
+          |> randomListElement (List.Extra.getAt 0 rnList)
+  in
+  case randomSecondOrderInfluenceeNodeId of
+     Nothing -> currentGraph
+     Just newNodeId -> connect recruiterNode newNodeId currentGraph
+
+
 --
 -- FORCES
 --
