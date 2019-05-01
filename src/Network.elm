@@ -105,20 +105,23 @@ updateContextWithValue nodeCtx value =
 -- CONNECT
 --
 
-connect: NodeId -> NodeId -> Graph Entity () -> Graph Entity ()
+connect: NodeId -> NodeId -> Graph n () -> Graph n ()
 connect from to graph =
     case newContext from to graph of
         Nothing -> graph
         Just ctx -> Graph.insert ctx graph
 
-connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity () -> Graph Entity ()
+connectNodeToNodeInList : NodeId -> List NodeId -> Graph n () -> Graph n ()
 connectNodeToNodeInList from nodeList graph =
     List.foldl (\to graph_ -> connect from to graph_) graph nodeList
 
 
-
-newContext: NodeId -> NodeId -> Graph Entity () -> Maybe (NodeContext Entity ())
+newContext: NodeId -> NodeId -> Graph n () -> Maybe (NodeContext n ())
 newContext from to graph =
+    Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing} ) (Graph.get from graph)
+
+newContext2: NodeId -> NodeId -> Graph n () -> Maybe (NodeContext n ())
+newContext2 from to graph =
     Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing} ) (Graph.get from graph)
 
 
@@ -127,14 +130,14 @@ newContext from to graph =
 -- CONNECTIONS
 --
 
-outGoingNodeIds : NodeId -> Graph Entity () -> List NodeId
+outGoingNodeIds : NodeId -> Graph n e -> List NodeId
 outGoingNodeIds nodeId graph =
     case Graph.get nodeId graph of
         Nothing -> []
         Just ctx -> ctx.outgoing |> IntDict.keys
 
 
-inComingNodeIds : NodeId -> Graph Entity () -> List NodeId
+inComingNodeIds : NodeId -> Graph n e -> List NodeId
 inComingNodeIds nodeId graph =
     case Graph.get nodeId graph of
         Nothing -> []
@@ -167,6 +170,7 @@ influencees2 : NodeId -> Graph n e -> List NodeId
 influencees2 nodeId graph =
    List.map (\n -> influencees n graph) (influencers nodeId graph)
      |> List.concat
+     |> List.filter (\x -> x /= nodeId)
 --
 -- FORCES
 --
