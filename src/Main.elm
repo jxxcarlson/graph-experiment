@@ -27,9 +27,12 @@ import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 import Random
 import List.Extra
+import CellGrid exposing (CellGrid, CellRenderer)
+import Grid
 
 gameTimeInterval = 1000
 searchForInfluencersInterval = 4
+gridWidth = 20
 
 
 main : Program () Model Msg
@@ -57,6 +60,8 @@ type Msg
     | AdvanceGameState
     | GetRandomNumbers
     | GotRandomNumbers (List Float)
+    | SetDisplayMode DisplayMode
+    | CellGrid CellGrid.Msg
 
 
 
@@ -79,6 +84,7 @@ type alias Model =
     , gameState : GameState
     , randomNumberList : List Float
     , displayMode : DisplayMode
+    , grid : CellGrid Grid.CellState
     }
 
 type DisplayMode = DisplayGraph | DisplayGrid
@@ -110,6 +116,7 @@ init _ =
       , gameState = Ready
       , randomNumberList = []
       , displayMode = DisplayGraph
+      , grid = Grid.empty gridWidth gridWidth
       }
       , Cmd.none )
 
@@ -255,8 +262,21 @@ update msg model =
 
                 _ = Debug.log "newGameState" newGameState
 
+
             in
             ( {model | randomNumberList = numbers, graph = newGraph2, gameState = newGameState}, Cmd.none )
+
+        SetDisplayMode displayMode ->
+                ({ model | displayMode = displayMode}, Cmd.none)
+
+        CellGrid msg_ ->
+            case msg_ of
+                CellGrid.MouseClick (i, j) (x, y) ->
+                  let
+                    message = "(i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
+                  in
+                    ({ model | message = message }, Cmd.none)
+
 
 
 getRandomNumbers : Cmd Msg
@@ -376,6 +396,7 @@ infoPanel model =
            ,  el [Font.size 14] (text "Click on nodes to 'recruit' them.")
            ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
            ,  el [Font.size 14] (text "Why?")
+           , row [spacing 18] [displayGraphButton model, displayGridButton model]
           ]
 
 controlPanel : Model -> Element Msg
@@ -441,8 +462,29 @@ recruitedNodes model =
 rightPanel : Model -> Element Msg
 rightPanel model =
     column [spacing 12, width (px 500), Border.width 1] [
-      viewGraph model  500 500 |> Element.html
+      case model.displayMode of
+        DisplayGraph -> viewGraph model  500 500 |> Element.html
+        DisplayGrid -> viewGrid model  500 500 |> Element.html
     ]
+
+
+viewGrid : Model -> Float -> Float -> Html Msg
+viewGrid model w h =
+    CellGrid.renderAsHtml 500 500 cellRenderer model.grid  |> Html.map CellGrid
+
+cellRenderer =
+    {
+         cellSize = 25
+       , cellColorizer = \cell ->
+             case cell.status of
+               Grid.Recruited -> Color.rgb 1 0 0
+               Grid.NotRecruited -> Color.rgb 0 0 1
+               Grid.Vacant -> Color.rgb 0 0 0
+       , defaultColor = Color.rgb 0 0 0
+       , gridLineWidth = 0.5
+       , gridLineColor = Color.rgb 0.5 0.5 0.5
+    }
+
 
 viewGraph : Model -> Float -> Float -> Html Msg
 viewGraph model w h =
@@ -460,6 +502,25 @@ viewGraph model w h =
 --
 -- BUTTONS
 --
+
+displayGraphButton : Model -> Element Msg
+displayGraphButton model =
+    Input.button  (buttonStyle [ activeBackground (model.displayMode == DisplayGraph)]) {
+        onPress = Just (SetDisplayMode DisplayGraph)
+      , label = el [Font.size 14] (text "Graph")
+    }
+
+activeBackground flag =
+    case flag of
+        True -> Background.color darkRed
+        False -> Background.color charcoal
+
+displayGridButton : Model -> Element Msg
+displayGridButton model =
+    Input.button  (buttonStyle [ activeBackground (model.displayMode == DisplayGrid)]) {
+        onPress = Just (SetDisplayMode DisplayGrid)
+      , label = el [Font.size 14] (text "Grid")
+    }
 
 startOverButton : Model -> Element Msg
 startOverButton model =

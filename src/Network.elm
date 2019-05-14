@@ -1,13 +1,13 @@
 module Network exposing (Entity, Status(..), NodeState, defaultNodeState, connect, setStatus
   , hiddenTestGraph, testGraph, initializeNode, updateContextWithValue, outGoingNodeIds, inComingNodeIds
   , connectNodeToNodeInList, setupGraph, computeForces, influencees, influencers, influencees2, recruitNodes,
-  nodeComplementOfGraph, randomListElement)
+  nodeComplementOfGraph, randomListElement, randomPairs, integerSequence)
 
 
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict
-import Maybe.Extra
+import PseudoRandom
 import List.Extra
 
 
@@ -26,32 +26,52 @@ type alias Entity =
 -- INITIALIZATION
 --
 
+distributeLocations : Graph Entity () -> Graph Entity ()
+distributeLocations graph =
+    Graph.mapNodes (\node -> node) graph
 
-unrecruitedNodeState : String -> NodeState
-unrecruitedNodeState name =
-    { name = name, status = NotRecruited, location = (0,0) }
 
-recruitedNodeState : String -> NodeState
-recruitedNodeState name =
-    { name = name, status = Recruited, location = (0,0) }
+integerSequence : Int -> Int -> Int -> List Int
+integerSequence modulus n seed =
+   PseudoRandom.floatSequence n seed (0,1)
+     |> List.map (\x -> round ((toFloat modulus)*x))
+     |> List.Extra.unique
+     |> List.filter (\x -> x < modulus)
 
+randomPairs:  Int -> Int -> Int -> List (Int, Int)
+randomPairs modulus n seed =
+    List.map2 Tuple.pair (integerSequence modulus n seed) (integerSequence modulus n (seed*seed))
+
+unrecruitedNodeState : String -> (Int, Int) -> NodeState
+unrecruitedNodeState name (i,j) =
+    { name = name, status = NotRecruited, location = (i,j) }
+
+recruitedNodeState : String -> (Int, Int) -> NodeState
+recruitedNodeState name (i,j) =
+    { name = name, status = Recruited, location = (i,j) }
 
 
 hiddenTestGraph =
     Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p0", unrecruitedNodeState "12", unrecruitedNodeState "p2", unrecruitedNodeState "p3"
-        , unrecruitedNodeState "p4", unrecruitedNodeState "p5", unrecruitedNodeState "q0", unrecruitedNodeState "q1"
-        , unrecruitedNodeState "q2", unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5"
-        , recruitedNodeState "r" ]
+        [ unrecruitedNodeState "p0" (10,18), unrecruitedNodeState "12" (16,15)
+        , unrecruitedNodeState "p2" (13,17), unrecruitedNodeState "p3" (3,12)
+        , unrecruitedNodeState "p4" (19,19), unrecruitedNodeState "p5" (2,1)
+        , unrecruitedNodeState "q0" (9,3), unrecruitedNodeState "q1"(7,13)
+        , unrecruitedNodeState "q2" (11,11), unrecruitedNodeState "q3" (4,6)
+        , unrecruitedNodeState "q4" (18,2), unrecruitedNodeState "q5"(17,8)
+        , recruitedNodeState "r" (8,10) ]
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
 
 testGraph =
     Graph.fromNodeLabelsAndEdgePairs
-         [ unrecruitedNodeState "p0", unrecruitedNodeState "12", unrecruitedNodeState "p2", unrecruitedNodeState "p3"
-                , unrecruitedNodeState "p4", unrecruitedNodeState "p5", unrecruitedNodeState "q0", unrecruitedNodeState "q1"
-                , unrecruitedNodeState "q2", unrecruitedNodeState "q3", unrecruitedNodeState "q4", unrecruitedNodeState "q5"
-                , recruitedNodeState "r" ]
+         [ unrecruitedNodeState "p0" (10,18), unrecruitedNodeState "12" (16,15)
+                 , unrecruitedNodeState "p2" (13,17), unrecruitedNodeState "p3" (3,12)
+                 , unrecruitedNodeState "p4" (19,19), unrecruitedNodeState "p5" (2,1)
+                 , unrecruitedNodeState "q0" (9,3), unrecruitedNodeState "q1"(7,13)
+                 , unrecruitedNodeState "q2" (11,11), unrecruitedNodeState "q3" (4,6)
+                 , unrecruitedNodeState "q4" (18,2), unrecruitedNodeState "q5"(17,8)
+                 , recruitedNodeState "r" (8,10) ]
         [  ]
 
 defaultNodeState = { name = "", status = NotRecruited, location = (0,0) }
