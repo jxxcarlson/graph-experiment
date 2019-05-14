@@ -275,9 +275,17 @@ update msg model =
             case msg_ of
                 CellGrid.MouseClick (i, j) (x, y) ->
                   let
-                    message = "(i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
+                    index = case CellGrid.cellAtMatrixIndex (i,j) model.grid of
+                        Nothing -> -1
+                        Just cell -> cell.id
+                    associatedOutgoingNodeIds =  (Network.outGoingNodeIds index model.hiddenGraph)
+                    newGraph = Network.setStatus  index Recruited  model.graph
+                                  |> Network.connect model.recruiter  index
+                                  |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                    newGrid = Grid.cellGridFromGraph gridWidth newGraph
+                    message = "node = " ++ String.fromInt index ++ ", (i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
                   in
-                    ({ model | message = message }, Cmd.none)
+                    ({ model | message = message, graph = newGraph, grid = newGrid }, Cmd.none)
 
 
 

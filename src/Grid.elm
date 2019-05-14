@@ -13,6 +13,7 @@ type CellStatus  = Recruited | NotRecruited | Vacant
 type alias Cell =
     { status : CellStatus
     , name : String
+    , id : Int
     }
 
 cellFromEntity : Network.Entity -> Cell
@@ -20,13 +21,13 @@ cellFromEntity entity =
    let nodeState_ = Network.nodeState entity
    in
      case nodeState_.status of
-       Network.Recruited -> { name = nodeState_.name, status = Recruited}
-       Network.NotRecruited -> { name = nodeState_.name, status = NotRecruited}
+       Network.Recruited -> { id = entity.id, name = nodeState_.name, status = Recruited}
+       Network.NotRecruited -> { id = entity.id, name = nodeState_.name, status = NotRecruited}
 
 
 empty: Int -> Int -> CellGrid Cell
 empty rows columns =
-    CellGrid.fromList rows columns (List.repeat (rows*columns) {name = "X", status = Vacant})
+    CellGrid.fromList rows columns (List.repeat (rows*columns) {id = -1, name = "X", status = Vacant})
       |> Maybe.withDefault CellGrid.empty
 
 
@@ -48,15 +49,3 @@ insertNode nodeEntity grid =
 
 
 
-
---make : Int -> Graph Network.Entity () -> CellGrid Cell
---make gridWidth graph =
---    let
---        emptyGrid = empty gridWidth gridWidth
---        nodes = Graph.nodes graph
---        List.foldl (\node acc -> ) cellList nodes
---
---     in
-
-
-foo = 1
