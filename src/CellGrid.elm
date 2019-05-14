@@ -36,15 +36,14 @@ transformed, and rendered as either SVG or HTML.
 -}
 
 import Array exposing (Array)
-import TypedSvg.Core exposing(Svg)
-import TypedSvg.Types exposing(Fill(..))
-import TypedSvg exposing (svg, rect,  g)
-import TypedSvg.Attributes exposing(viewBox, stroke,fill)
+import TypedSvg.Core as Svg exposing(Svg, Attribute)
+import TypedSvg.Types exposing(Fill(..),Length(..), Transform(..))
+import TypedSvg exposing (svg, rect,  text_, g)
+import TypedSvg.Attributes exposing(viewBox, stroke,fill, fontSize)
 import TypedSvg.Attributes.InPx exposing (height, width, x, y,  strokeWidth)
 import Html exposing (Html)
 import Color exposing (Color)
 import Html.Events.Extra.Mouse as Mouse
-
 
 {-| A value of type `CellGrid a` is a rectangular array
 of values of type a.
@@ -292,18 +291,32 @@ renderAsSvg cr cellGrid =
 renderCell : CellRenderer a -> CellGrid a -> ( Int, Int ) -> Svg Msg
 renderCell cr cellGrid ( i, j ) =
     let
+       cell = cellAtMatrixIndex ( i, j ) cellGrid
        size = cr.cellSize
-       color = Maybe.map cr.cellColorizer (cellAtMatrixIndex ( i, j ) cellGrid) |> Maybe.withDefault cr.defaultColor
+       color = Maybe.map cr.cellColorizer cell |> Maybe.withDefault cr.defaultColor
+       txt = case cr.text of
+           Nothing -> ""
+           Just textMap -> Maybe.map textMap cell |> Maybe.withDefault ""
+       xCoordinate = size * (toFloat i)
+       yCoordinate = size * (toFloat j)
     in
-      rect
+       g [] [
+          rect
               [ width size
               , height size
-              , x  <| size * (toFloat i)
-              , y  <| size * (toFloat j)
+              , x  xCoordinate
+              , y  yCoordinate
               , fill (Fill color)
               , Mouse.onDown (.clientPos >> MouseClick (i,j))
               , strokeWidth  cr.gridLineWidth
               , stroke cr.gridLineColor
               ]
               []
+          , text_
+              [ TypedSvg.Attributes.transform [ Translate (xCoordinate + 7) (yCoordinate + 14) ]
+              , (fontSize (Px 9))
+              , stroke (Color.rgba 1 1 1 1)
+              ]
+              [ Svg.text txt ]
+           ]
 

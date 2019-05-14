@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (main, roundTo)
 
 {- This is a starter app which presents a text label, text field, and a button.
    What you enter in the text field is echoed in the label.  When you press the
@@ -23,7 +23,7 @@ tickInterval =
 
 
 initialSeed = 3771
-gridWidth = 70
+gridWidth = 20
 gridDisplayWidth = 500.0
 
 main =
@@ -152,8 +152,14 @@ update msg model =
                         CellGrid.MouseClick (i, j) (x, y) ->
                           let
                             message = "(i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
+                            newHeatMap= case CellGrid.cellAtMatrixIndex (i,j) model.heatMap of
+                                Nothing -> model.heatMap
+                                Just t ->
+                                    case t < 0.5 of
+                                        True -> CellGrid.setValue model.heatMap (i,j) 1.0
+                                        False -> CellGrid.setValue model.heatMap (i,j) 0.0
                           in
-                            ({ model | message = message }, Cmd.none)
+                            ({ model | message = message, heatMap = newHeatMap}, Cmd.none)
 
 
 
@@ -172,7 +178,7 @@ mainColumn model =
     column mainColumnStyle
         [ column [ centerX, spacing 20 ]
             [ title "Diffusion of Heat"
-            , el [] (CellGrid.renderAsHtml 400 400 cellrenderer model.heatMap |> Element.html |> Element.map CellGrid)
+            , el [] (CellGrid.renderAsHtml gridDisplayWidth gridDisplayWidth cellrenderer model.heatMap |> Element.html |> Element.map CellGrid)
             , row [ spacing 18 ]
                 [ resetButton
                 , runButton model
@@ -182,7 +188,7 @@ mainColumn model =
             , el [ Font.size 14, centerX, Font.color <| gray 0.5 ] (text "Run with 0 < beta < 1.0")
             , Element.newTabLink [Font.size 14, centerX, Font.color <| Element.rgb 0.4 0.4 1] { url = "https://github.com/jxxcarlson/elm-cell-grid/tree/3.0.0/examples/HeatEquation",
                               label = el [] (text "Code on GitHub")}
-            , el [Font.size 14, centerX, Font.color <| gray 0.5] (text model.message) 
+            , el [Font.size 14, centerX, Font.color <| gray 0.5] (text model.message)
             ]
         ]
 
@@ -191,14 +197,23 @@ gray g = Element.rgb g g g
 cellrenderer : CellRenderer Float
 cellrenderer =
     {
-         cellSize = gridDisplayWidth/(toFloat gridWidth)
+         cellSize = gridDisplayWidth/(toFloat (gridWidth + 1))
        , cellColorizer = \z -> Color.rgb z 0 0
-       , text = Nothing
+       , text = textRenderer1
        , defaultColor = Color.rgb 0 0 0
        , gridLineColor = Color.rgb 180 0 0
        , gridLineWidth = 0.5
     }
 
+textRenderer1 = Nothing
+textRenderer2 = Just (\z -> String.fromFloat (roundTo 1 z))
+
+roundTo : Int -> Float -> Float
+roundTo places x =
+    let
+      k = 10.0^(toFloat places)
+    in
+      (toFloat <| round(k * x))/k
 
 counterDisplay : Model -> Element Msg
 counterDisplay model =

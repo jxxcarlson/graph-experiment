@@ -492,6 +492,7 @@ cellRenderer =
                Grid.Recruited -> Color.rgb 1 0 0
                Grid.NotRecruited -> Color.rgb 0 0 1
                Grid.Vacant -> Color.rgb 0 0 0
+       , text = Just (\cell -> cell.name)
        , defaultColor = Color.rgb 0 0 0
        , gridLineWidth = 0.5
        , gridLineColor = Color.rgb 0.5 0.5 0.5

@@ -27,7 +27,7 @@ cellFromEntity entity =
 
 empty: Int -> Int -> CellGrid Cell
 empty rows columns =
-    CellGrid.fromList rows columns (List.repeat (rows*columns) {id = -1, name = "X", status = Vacant})
+    CellGrid.fromList rows columns (List.repeat (rows*columns) {id = -1, name = "", status = Vacant})
       |> Maybe.withDefault CellGrid.empty
 
 
