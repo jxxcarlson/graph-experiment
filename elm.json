@@ -19,6 +19,7 @@
             "elm-community/maybe-extra": "5.0.0",
             "elm-community/typed-svg": "5.0.1",
             "gampleman/elm-visualization": "2.0.0",
+            "jxxcarlson/elm-cell-grid": "4.0.0",
             "mdgriffith/elm-ui": "1.1.0",
             "mpizenberg/elm-pointer-events": "4.0.1"
         },

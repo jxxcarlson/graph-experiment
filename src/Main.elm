@@ -59,6 +59,7 @@ type Msg
     | GotRandomNumbers (List Float)
 
 
+
 --
 -- MODEL
 --
@@ -77,7 +78,10 @@ type alias Model =
     , gameClock : Int
     , gameState : GameState
     , randomNumberList : List Float
+    , displayMode : DisplayMode
     }
+
+type DisplayMode = DisplayGraph | DisplayGrid
 
 type GameState = Ready | Running | Paused | GameOver
 
@@ -105,6 +109,7 @@ init _ =
       , gameClock = 0
       , gameState = Ready
       , randomNumberList = []
+      , displayMode = DisplayGraph
       }
       , Cmd.none )
 

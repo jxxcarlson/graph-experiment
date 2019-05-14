@@ -15,7 +15,7 @@ import List.Extra
 -- TYPES
 --
 
-type alias NodeState = { name: String, status: Status }
+type alias NodeState = { name: String, status: Status, location: (Int, Int) }
 
 type Status = Recruited | NotRecruited
 
@@ -29,11 +29,11 @@ type alias Entity =
 
 unrecruitedNodeState : String -> NodeState
 unrecruitedNodeState name =
-    { name = name, status = NotRecruited }
+    { name = name, status = NotRecruited, location = (0,0) }
 
 recruitedNodeState : String -> NodeState
 recruitedNodeState name =
-    { name = name, status = Recruited }
+    { name = name, status = Recruited, location = (0,0) }
 
 
 
@@ -54,7 +54,7 @@ testGraph =
                 , recruitedNodeState "r" ]
         [  ]
 
-defaultNodeState = { name = "", status = NotRecruited }
+defaultNodeState = { name = "", status = NotRecruited, location = (0,0) }
 
 
 initializeNode : NodeContext NodeState () -> NodeContext Entity ()
@@ -91,7 +91,9 @@ setupGraph inputGraph =
 
 setStatus : Int -> Status -> Graph Entity () -> Graph Entity ()
 setStatus  nodeIndex status graph =
-    Graph.mapNodes (\n -> if n.id == nodeIndex then { n | value = { name = n.value.name, status = status }}  else n) graph
+    Graph.mapNodes (\n -> if n.id == nodeIndex then
+         { n | value = { name = n.value.name, status = status, location = n.value.location }}
+      else n) graph
 
 
 updateContextWithValue : NodeContext Entity () -> Entity -> NodeContext Entity ()
