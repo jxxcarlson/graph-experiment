@@ -399,6 +399,8 @@ infoPanel model =
            ,  el [Font.size 14] (text "Clicking certain nodes will automatically recruit others.")
            ,  el [Font.size 14] (text "Why?")
            , row [spacing 18] [displayGraphButton model, displayGridButton model]
+           , row [Font.size 12] [el [] (text model.message)]
+
           ]
 
 controlPanel : Model -> Element Msg
