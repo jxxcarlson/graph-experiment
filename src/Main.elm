@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (main, Msg(..))
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
