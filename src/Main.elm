@@ -84,7 +84,7 @@ type alias Model =
     , gameState : GameState
     , randomNumberList : List Float
     , displayMode : DisplayMode
-    , grid : CellGrid Grid.CellState
+    , grid : CellGrid Grid.Cell
     }
 
 type DisplayMode = DisplayGraph | DisplayGrid
@@ -116,7 +116,7 @@ init _ =
       , gameState = Ready
       , randomNumberList = []
       , displayMode = DisplayGraph
-      , grid = Grid.empty gridWidth gridWidth
+      , grid = Grid.cellGridFromGraph gridWidth graph -- Grid.empty gridWidth gridWidth
       }
       , Cmd.none )
 
@@ -178,11 +178,13 @@ update msg model =
                       Network.setStatus  index Recruited  model.graph
                          |> Network.connect model.recruiter  index
                          |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                newGrid = Grid.cellGridFromGraph gridWidth newGraph
                 forces = Network.computeForces newGraph
 
             in
                     { model | message = "Clicked node " ++ String.fromInt index
                               , graph = newGraph
+                              , grid = newGrid
                               , simulation = (Force.simulation forces)
                               , clickCount = model.clickCount + 1
                             }  |> putCmd Cmd.none

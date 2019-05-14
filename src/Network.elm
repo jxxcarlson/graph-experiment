@@ -1,7 +1,7 @@
 module Network exposing (Entity, Status(..), NodeState, defaultNodeState, connect, setStatus
   , hiddenTestGraph, testGraph, initializeNode, updateContextWithValue, outGoingNodeIds, inComingNodeIds
   , connectNodeToNodeInList, setupGraph, computeForces, influencees, influencers, influencees2, recruitNodes,
-  nodeComplementOfGraph, randomListElement, randomPairs, integerSequence)
+  nodeComplementOfGraph, randomListElement, randomPairs, integerSequence, nodeState)
 
 
 import Force exposing (State)
@@ -21,6 +21,10 @@ type Status = Recruited | NotRecruited
 
 type alias Entity =
     Force.Entity NodeId { value : NodeState }
+
+nodeState : Entity -> NodeState
+nodeState entity =
+    entity.value
 
 --
 -- INITIALIZATION
