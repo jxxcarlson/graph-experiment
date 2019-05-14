@@ -74,6 +74,7 @@ type alias CellRenderer a = {
        cellSize : Float
      , gridLineWidth : Float
      , cellColorizer : a -> Color
+     , text : Maybe (a -> String)
      , defaultColor : Color
      , gridLineColor: Color
 
