@@ -154,7 +154,8 @@ init _ =
 type AudioMessage
     = Silence
     | Chirp
-    | Beep
+    | Coo
+    | LongChirp
 
 
 encodeAudioMessage : AudioMessage -> Encode.Value
@@ -166,8 +167,11 @@ encodeAudioMessage msg =
         Chirp ->
             Encode.string "chirp"
 
-        Beep ->
-            Encode.string "beep"
+        Coo ->
+            Encode.string "coo"
+
+        LongChirp ->
+            Encode.string "longChirp"
 
 
 port sendMessage : Encode.Value -> Cmd msg
@@ -322,14 +326,14 @@ update msg model =
 
         GotRandomNumbers numbers ->
             let
-                ( audioMsg, newGraph1 ) =
+                newGraph1 =
                     -- Recruit a new node
                     case model.gameState == Running && modBy searchForInfluencersInterval model.gameClock == 0 of
                         True ->
-                            ( Chirp, Network.recruitNodes numbers model.recruiter model.graph model.hiddenGraph )
+                            Network.recruitNodes numbers model.recruiter model.graph model.hiddenGraph
 
                         False ->
-                            ( Silence, model.graph )
+                            model.graph
 
                 newGraph2 =
                     case model.gameState == Running && modBy 41 model.gameClock == 0 && Network.influencees model.recruiter newGraph1 /= [] of
@@ -409,6 +413,14 @@ update msg model =
                         associatedOutgoingNodeIds =
                             (Network.outGoingNodeIds index model.hiddenGraph)
 
+                        audioMsg =
+                            case List.length associatedOutgoingNodeIds == 0 of
+                                True ->
+                                    Chirp
+
+                                False ->
+                                    LongChirp
+
                         newGraph =
                             Network.setStatus index Recruited model.graph
                                 |> Network.connect model.recruiter index
@@ -420,7 +432,7 @@ update msg model =
                         message =
                             "CHIRP1, Grid, node = " ++ String.fromInt index ++ ", (i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
                     in
-                        ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage Chirp )
+                        ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
 
 
 getRandomNumbers : Cmd Msg
