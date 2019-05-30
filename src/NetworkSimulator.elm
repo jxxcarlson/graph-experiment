@@ -114,6 +114,7 @@ type GameState
     = Ready
     | Running
     | Paused
+    | GameEnding
     | GameOver
 
 
@@ -156,6 +157,7 @@ type AudioMessage
     | Chirp
     | Coo
     | LongChirp
+    | VeryLongChirp
 
 
 encodeAudioMessage : AudioMessage -> Encode.Value
@@ -172,6 +174,9 @@ encodeAudioMessage msg =
 
         LongChirp ->
             Encode.string "longChirp"
+
+        VeryLongChirp ->
+            Encode.string "veryLongChirp"
 
 
 port sendMessage : Encode.Value -> Cmd msg
@@ -297,7 +302,10 @@ update msg model =
                             Running
 
                         GameOver ->
-                            Running
+                            GameOver
+
+                        GameEnding ->
+                            GameOver
             in
                 case model.gameState of
                     GameOver ->
@@ -326,6 +334,9 @@ update msg model =
 
         GotRandomNumbers numbers ->
             let
+                recruitCount1 =
+                    Grid.recruitedCount model.grid
+
                 newGraph1 =
                     -- Recruit a new node
                     case model.gameState == Running && modBy searchForInfluencersInterval model.gameClock == 0 of
@@ -360,16 +371,37 @@ update msg model =
                                         Network.connect model.recruiter nodeId_ newGraph1
                                             |> Network.setStatus nodeId_ Recruited
 
-                newGameState =
-                    case List.length (Network.influencees model.recruiter newGraph2) == Graph.size newGraph2 - 1 of
-                        True ->
-                            GameOver
-
-                        False ->
-                            model.gameState
-
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph2
+
+                recruitCount2 =
+                    Grid.recruitedCount newGrid
+
+                newGameState =
+                    let
+                        everyoneRecruited =
+                            List.length (Network.influencees model.recruiter newGraph2) == Graph.size newGraph2 - 1
+                    in
+                        case ( model.gameState, everyoneRecruited ) of
+                            ( Running, True ) ->
+                                GameEnding
+
+                            ( GameEnding, _ ) ->
+                                GameOver
+
+                            _ ->
+                                model.gameState
+
+                audioMsg =
+                    case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
+                        ( GameEnding, _ ) ->
+                            VeryLongChirp
+
+                        ( Running, True ) ->
+                            Coo
+
+                        _ ->
+                            Silence
             in
                 ( { model
                     | randomNumberList = numbers
@@ -377,8 +409,7 @@ update msg model =
                     , grid = newGrid
                     , gameState = newGameState
                   }
-                , Cmd.none
-                  -- sendAudioMessage audioMsg
+                , sendAudioMessage audioMsg
                 )
 
         SetDisplayMode displayMode ->
@@ -759,6 +790,9 @@ controlButtonTitle model =
 
         Paused ->
             "Paused"
+
+        GameEnding ->
+            "Game ending"
 
         GameOver ->
             "Play again"
