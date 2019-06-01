@@ -21,6 +21,7 @@ module Network
         , recruitNodes
         , nodeComplementOfGraph
         , recruitRandomFreeNode
+        , recruitRandom
         , randomListElement
         , randomPairs
         , integerSequence
@@ -47,6 +48,17 @@ type alias NodeState =
     }
 
 
+filterNodes : (NodeState -> Bool) -> Graph Entity () -> List (Node Entity)
+filterNodes filterNodeState graph =
+    let
+        filterNode : Node Entity -> Bool
+        filterNode node =
+            node.label |> nodeState |> filterNodeState
+    in
+        Graph.nodes graph
+            |> List.filter filterNode
+
+
 type Status
     = Recruited
     | NotRecruited
@@ -54,6 +66,11 @@ type Status
 
 type alias Entity =
     Force.Entity NodeId { value : NodeState }
+
+
+nodeState2 : Node Entity -> NodeState
+nodeState2 node =
+    node.label.value
 
 
 nodeState : Entity -> NodeState
@@ -220,10 +237,6 @@ connectNodeToNodeInList from nodeList graph =
     List.foldl (\to graph_ -> connect from to graph_ |> setStatus to Recruited) graph nodeList
 
 
-
--- xxx setStatus nodeIndex status graph
-
-
 newContext : NodeId -> NodeId -> Graph n () -> Maybe (NodeContext n ())
 newContext from to graph =
     Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing }) (Graph.get from graph)
@@ -319,13 +332,13 @@ randomListElement maybeRandomNumber list =
                 List.Extra.getAt i list
 
 
-{-| Return the list of nodeId's of graph that are not in
+{-| Return the list of nodes of graph that are not in
 the nodeExclusionList
 -}
-nodeComplementOfGraph : Graph n e -> List NodeId -> List NodeId
+nodeComplementOfGraph : Graph n e -> List NodeId -> List (Node n)
 nodeComplementOfGraph graph nodeExclusionList =
-    Graph.nodeIds graph
-        |> List.Extra.filterNot (\item -> List.member item nodeExclusionList)
+    Graph.nodes graph
+        |> List.Extra.filterNot (\item -> List.member item.id nodeExclusionList)
 
 
 recruitNodes : List Float -> NodeId -> Graph Entity () -> Graph Entity () -> Graph Entity ()
@@ -355,12 +368,16 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
                     |> setStatus newNodeId Recruited
 
 
+{-| The recruiter recruits a free node at random
+-}
 recruitRandomFreeNode : List Float -> NodeId -> Graph Entity () -> Graph Entity ()
 recruitRandomFreeNode numbers recruiter graph =
     let
+        freeNodes : List NodeId
         freeNodes =
             nodeComplementOfGraph graph
                 ((influencees recruiter graph) ++ [ recruiter ])
+                |> List.map (\n -> n.id)
 
         rn2 =
             List.Extra.getAt 2 numbers
@@ -375,6 +392,58 @@ recruitRandomFreeNode numbers recruiter graph =
             Just nodeId_ ->
                 connect recruiter nodeId_ graph
                     |> setStatus nodeId_ Recruited
+
+
+{-| A random influencee whose recruitedCount is 0 or 1
+recruits a free node at random.
+-}
+recruitRandom : List Float -> NodeId -> Graph Entity () -> Graph Entity ()
+recruitRandom numbers designatedRecruiter graph =
+    let
+        rn2 =
+            List.Extra.getAt 2 numbers
+
+        influencees_ =
+            influencees designatedRecruiter graph
+
+        -- recruiter =
+        --     randomListElement rn2 influencees_
+        recruiters =
+            filterNodes (\ns -> ns.status == Recruited && ns.numberRecruited < 2) graph
+
+        recruiter =
+            (randomListElement rn2 recruiters)
+                |> Maybe.map (\n -> n.id)
+
+        freeNodes =
+            nodeComplementOfGraph graph
+                (designatedRecruiter :: influencees_)
+                |> List.map (\n -> n.id)
+
+        -- |>  filterNodes filterNodeState graph
+        rn3 =
+            List.Extra.getAt 3 numbers
+
+        freeNode =
+            randomListElement rn3 freeNodes
+    in
+        case ( recruiter, freeNode ) of
+            ( Just recruiterNodeId, Just recruiteeNodeId ) ->
+                connect recruiterNodeId recruiteeNodeId graph
+                    |> setStatus recruiteeNodeId Recruited
+
+            _ ->
+                graph
+
+
+consIfDefined : Maybe a -> List a -> List a
+consIfDefined maybeValue list =
+    case maybeValue of
+        Nothing ->
+            list
+
+        Just element ->
+            element :: list
 
 
 

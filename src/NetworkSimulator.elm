@@ -352,13 +352,14 @@ update msg model =
 
                 newGraph2 =
                     -- New recruitees recruit other nodes at random
-                    case model.gameState == Running && modBy 41 model.gameClock == 0 && Network.influencees model.recruiter newGraph1 /= [] of
+                    case model.gameState == Running && modBy 4 model.gameClock == 0 && Network.influencees model.recruiter newGraph1 /= [] of
                         False ->
                             newGraph1
 
                         True ->
-                            Network.recruitRandomFreeNode numbers model.recruiter newGraph1
+                            Network.recruitRandom numbers model.recruiter newGraph1
 
+                -- Network.recruitRandomFreeNode numbers model.recruiter newGraph1
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph2
 
@@ -368,7 +369,7 @@ update msg model =
                 newGameState =
                     let
                         everyoneRecruited =
-                            List.length (Network.influencees model.recruiter newGraph2) == Graph.size newGraph2 - 1
+                            Grid.recruitedCount model.grid == Graph.size model.graph
                     in
                         case ( model.gameState, everyoneRecruited ) of
                             ( Running, True ) ->
@@ -605,7 +606,9 @@ controlPanel model =
         , scoreIndicator model
         , row [ spacing 18 ]
             [ el [] (text <| "Nodes: " ++ (String.fromInt <| Graph.size model.graph))
-            , el [] (text <| "Recruited: " ++ (String.fromInt (List.length <| recruitedNodes model)))
+            , recruitedDisplay model
+
+            -- , el [] (text <| )
             ]
 
         -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
@@ -628,6 +631,15 @@ influenceesDisplay model =
                 |> String.join ", "
     in
         el [] (text <| "Influencees: " ++ ii)
+
+
+recruitedDisplay : Model -> Element Msg
+recruitedDisplay model =
+    let
+        n =
+            (Grid.recruitedCount model.grid) - 1 |> String.fromInt
+    in
+        el [] (text <| "Recruited: " ++ n)
 
 
 influenceesDisplay2 : Model -> Element Msg
