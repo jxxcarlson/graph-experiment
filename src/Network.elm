@@ -39,7 +39,11 @@ import List.Extra
 
 
 type alias NodeState =
-    { name : String, status : Status, location : ( Int, Int ) }
+    { name : String
+    , status : Status
+    , numberRecruited : Int
+    , location : ( Int, Int )
+    }
 
 
 type Status
@@ -82,12 +86,12 @@ randomPairs modulus n seed =
 
 unrecruitedNodeState : String -> ( Int, Int ) -> NodeState
 unrecruitedNodeState name ( i, j ) =
-    { name = name, status = NotRecruited, location = ( i, j ) }
+    { name = name, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
 
 
 recruitedNodeState : String -> ( Int, Int ) -> NodeState
 recruitedNodeState name ( i, j ) =
-    { name = name, status = Recruited, location = ( i, j ) }
+    { name = name, status = Recruited, numberRecruited = 0, location = ( i, j ) }
 
 
 hiddenTestGraph =
@@ -129,7 +133,7 @@ testGraph =
 
 
 defaultNodeState =
-    { name = "", status = NotRecruited, location = ( 0, 0 ) }
+    { name = "", status = NotRecruited, numberRecruited = 0, location = ( 0, 0 ) }
 
 
 initializeNode : NodeContext NodeState () -> NodeContext Entity ()
@@ -171,7 +175,14 @@ setStatus nodeIndex status graph =
     Graph.mapNodes
         (\n ->
             if n.id == nodeIndex then
-                { n | value = { name = n.value.name, status = status, location = n.value.location } }
+                { n
+                    | value =
+                        { name = n.value.name
+                        , status = status
+                        , numberRecruited = n.value.numberRecruited
+                        , location = n.value.location
+                        }
+                }
             else
                 n
         )
