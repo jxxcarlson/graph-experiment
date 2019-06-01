@@ -238,31 +238,34 @@ update msg model =
             { model | drag = Just (Drag xy xy index) } |> putCmd Cmd.none
 
         MouseClick index xy ->
-            let
-                associatedIncomingNodeIds =
-                    (Network.inComingNodeIds index model.hiddenGraph)
+            if model.gameState /= Running then
+                ( model, Cmd.none )
+            else
+                let
+                    associatedIncomingNodeIds =
+                        (Network.inComingNodeIds index model.hiddenGraph)
 
-                associatedOutgoingNodeIds =
-                    (Network.outGoingNodeIds index model.hiddenGraph)
+                    associatedOutgoingNodeIds =
+                        (Network.outGoingNodeIds index model.hiddenGraph)
 
-                newGraph =
-                    Network.setStatus index Recruited model.graph
-                        |> Network.connect model.recruiter index
-                        |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                    newGraph =
+                        Network.setStatus index Recruited model.graph
+                            |> Network.connect model.recruiter index
+                            |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
 
-                newGrid =
-                    Grid.cellGridFromGraph gridWidth newGraph
+                    newGrid =
+                        Grid.cellGridFromGraph gridWidth newGraph
 
-                forces =
-                    Network.computeForces newGraph
-            in
-                { model
-                    | graph = newGraph
-                    , grid = newGrid
-                    , simulation = (Force.simulation forces)
-                    , clickCount = model.clickCount + 1
-                }
-                    |> putCmd Cmd.none
+                    forces =
+                        Network.computeForces newGraph
+                in
+                    { model
+                        | graph = newGraph
+                        , grid = newGrid
+                        , simulation = (Force.simulation forces)
+                        , clickCount = model.clickCount + 1
+                    }
+                        |> putCmd Cmd.none
 
         DragAt xy ->
             case model.drag of
@@ -430,40 +433,43 @@ update msg model =
                 )
 
         CellGrid msg_ ->
-            case msg_ of
-                CellGrid.MouseClick ( i, j ) ( x, y ) ->
-                    let
-                        index =
-                            case CellGrid.cellAtMatrixIndex ( i, j ) model.grid of
-                                Nothing ->
-                                    -1
+            if model.gameState /= Running then
+                ( model, Cmd.none )
+            else
+                case msg_ of
+                    CellGrid.MouseClick ( i, j ) ( x, y ) ->
+                        let
+                            index =
+                                case CellGrid.cellAtMatrixIndex ( i, j ) model.grid of
+                                    Nothing ->
+                                        -1
 
-                                Just cell ->
-                                    cell.id
+                                    Just cell ->
+                                        cell.id
 
-                        associatedOutgoingNodeIds =
-                            (Network.outGoingNodeIds index model.hiddenGraph)
+                            associatedOutgoingNodeIds =
+                                (Network.outGoingNodeIds index model.hiddenGraph)
 
-                        audioMsg =
-                            case List.length associatedOutgoingNodeIds == 0 of
-                                True ->
-                                    Chirp
+                            audioMsg =
+                                case List.length associatedOutgoingNodeIds == 0 of
+                                    True ->
+                                        Chirp
 
-                                False ->
-                                    LongChirp
+                                    False ->
+                                        LongChirp
 
-                        newGraph =
-                            Network.setStatus index Recruited model.graph
-                                |> Network.connect model.recruiter index
-                                |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                            newGraph =
+                                Network.setStatus index Recruited model.graph
+                                    |> Network.connect model.recruiter index
+                                    |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
 
-                        newGrid =
-                            Grid.cellGridFromGraph gridWidth newGraph
+                            newGrid =
+                                Grid.cellGridFromGraph gridWidth newGraph
 
-                        message =
-                            "CHIRP1, Grid, node = " ++ String.fromInt index ++ ", (i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
-                    in
-                        ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
+                            message =
+                                "CHIRP1, Grid, node = " ++ String.fromInt index ++ ", (i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
+                        in
+                            ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
 
 
 getRandomNumbers : Cmd Msg
