@@ -40,9 +40,15 @@ import List.Extra
 --
 
 
+type alias GraphId =
+    Int
+
+
 type alias NodeState =
     { name : String
     , status : Status
+
+    -- , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
     }
