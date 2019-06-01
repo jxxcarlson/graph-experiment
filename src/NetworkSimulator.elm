@@ -341,7 +341,8 @@ update msg model =
                     Grid.recruitedCount model.grid
 
                 newGraph1 =
-                    -- Recruit a new node
+                    -- The designated recruiter (model.recruiter) recruits a new node if tne gameClock is
+                    -- zero mod N, N = searchForInfluencersInterval
                     case model.gameState == Running && modBy searchForInfluencersInterval model.gameClock == 0 of
                         True ->
                             Network.recruitNodes numbers model.recruiter model.graph model.hiddenGraph
@@ -350,29 +351,13 @@ update msg model =
                             model.graph
 
                 newGraph2 =
+                    -- New recruitees recruit other nodes at random
                     case model.gameState == Running && modBy 41 model.gameClock == 0 && Network.influencees model.recruiter newGraph1 /= [] of
                         False ->
                             newGraph1
 
                         True ->
-                            let
-                                freeNodes =
-                                    Network.nodeComplementOfGraph newGraph1
-                                        ((Network.influencees model.recruiter newGraph1) ++ [ model.recruiter ])
-
-                                rn2 =
-                                    List.Extra.getAt 2 numbers
-
-                                freeNode =
-                                    Network.randomListElement rn2 freeNodes
-                            in
-                                case freeNode of
-                                    Nothing ->
-                                        newGraph1
-
-                                    Just nodeId_ ->
-                                        Network.connect model.recruiter nodeId_ newGraph1
-                                            |> Network.setStatus nodeId_ Recruited
+                            Network.recruitRandomFreeNode numbers model.recruiter newGraph1
 
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph2

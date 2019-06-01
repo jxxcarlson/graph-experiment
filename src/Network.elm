@@ -20,6 +20,7 @@ module Network
         , influencees2
         , recruitNodes
         , nodeComplementOfGraph
+        , recruitRandomFreeNode
         , randomListElement
         , randomPairs
         , integerSequence
@@ -265,7 +266,8 @@ inComingNodeIds nodeId graph =
 --
 
 
-{-| If graph contains a -> b, a -> c, then influencees a graph returns [b,c]
+{-| If graph contains nodeId -> b, nodeId -> c, etc.,
+then influencees a graph returns [b, c, etc]
 -}
 influencees : NodeId -> Graph n e -> List NodeId
 influencees nodeId graph =
@@ -317,6 +319,9 @@ randomListElement maybeRandomNumber list =
                 List.Extra.getAt i list
 
 
+{-| Return the list of nodeId's of graph that are not in
+the nodeExclusionList
+-}
 nodeComplementOfGraph : Graph n e -> List NodeId -> List NodeId
 nodeComplementOfGraph graph nodeExclusionList =
     Graph.nodeIds graph
@@ -326,6 +331,7 @@ nodeComplementOfGraph graph nodeExclusionList =
 recruitNodes : List Float -> NodeId -> Graph Entity () -> Graph Entity () -> Graph Entity ()
 recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
     let
+        -- random influencee of recruiterNode
         randomInfluenceeNodeId : Maybe NodeId
         randomInfluenceeNodeId =
             influencees recruiterNode currentGraph
@@ -347,6 +353,28 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
             Just newNodeId ->
                 connect recruiterNode newNodeId currentGraph
                     |> setStatus newNodeId Recruited
+
+
+recruitRandomFreeNode : List Float -> NodeId -> Graph Entity () -> Graph Entity ()
+recruitRandomFreeNode numbers recruiter graph =
+    let
+        freeNodes =
+            nodeComplementOfGraph graph
+                ((influencees recruiter graph) ++ [ recruiter ])
+
+        rn2 =
+            List.Extra.getAt 2 numbers
+
+        freeNode =
+            randomListElement rn2 freeNodes
+    in
+        case freeNode of
+            Nothing ->
+                graph
+
+            Just nodeId_ ->
+                connect recruiter nodeId_ graph
+                    |> setStatus nodeId_ Recruited
 
 
 
