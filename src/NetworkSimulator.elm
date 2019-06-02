@@ -353,15 +353,6 @@ update msg model =
                 recruitCount1 =
                     Grid.recruitedCount model.grid
 
-                influencees_ =
-                    Network.influencees model.recruiter model.graph
-
-                rn1 =
-                    List.Extra.getAt 1 numbers
-
-                maybeRecruiter =
-                    Network.randomListElement rn1 influencees_
-
                 newGraph =
                     -- New recruitees recruit other nodes at random
                     case
@@ -374,21 +365,10 @@ update msg model =
                             model.graph
 
                         True ->
-                            case maybeRecruiter of
-                                Nothing ->
-                                    model.graph
 
-                                Just recruiter_ ->
-                                    let
-                                        _ =
-                                            Debug.log "MODREC" model.recruiter
+                            Network.recruitRandom numbers model.recruiter model.graph
 
-                                        _ =
-                                            Debug.log "INFL" influencees_
-                                    in
-                                        Network.recruitRandom numbers (Debug.log "REC" recruiter_) model.graph
 
-                -- Network.recruitRandomFreeNode numbers model.recruiter newGraph1
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph
 
@@ -441,6 +421,7 @@ update msg model =
                 ( { model
                     | gameState = Ready
                     , gameClock = 0
+                    , clickCount = 0
                     , graph = graph
                     , simulation = (Force.simulation forces)
                     , grid = Grid.cellGridFromGraph gridWidth graph
@@ -662,8 +643,6 @@ controlPanel model =
             [ startOverButton model
             , resetButton model
             ]
-        , influenceesDisplay model
-        , influenceesDisplay2 model
         ]
 
 

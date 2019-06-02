@@ -55,12 +55,22 @@ type alias NodeState =
     }
 
 
-filterNodes : (NodeState -> Bool) -> Graph Entity () -> List (Node Entity)
-filterNodes filterNodeState graph =
+filterNodesOnState : (NodeState -> Bool) -> Graph Entity () -> List (Node Entity)
+filterNodesOnState filterNodeState graph =
     let
         filterNode : Node Entity -> Bool
         filterNode node =
             node.label |> nodeState |> filterNodeState
+    in
+        Graph.nodes graph
+            |> List.filter filterNode
+
+filterNodes : (Entity -> Bool) -> Graph Entity () -> List (Node Entity)
+filterNodes filterNode_ graph =
+    let
+        filterNode : Node Entity -> Bool
+        filterNode node =
+            node.label |> filterNode_
     in
         Graph.nodes graph
             |> List.filter filterNode
@@ -458,39 +468,29 @@ recruitRandom numbers designatedRecruiter graph =
         rn2 =
             List.Extra.getAt 2 numbers
 
-        influencees_ =
+        influenceeNodeIDs =
             influencees designatedRecruiter graph
 
-        -- recruiter =
-        --     randomListElement rn2 influencees_
-        recruiters =
-            filterNodes
-                (\ns ->
-                    ns.status
-                        == Recruited
-                        && ns.numberRecruited
-                        < 2
-                        && ns.parentGraphId
-                        < 100
-                )
-                graph
 
-        recruiter_ =
-            Debug.log "theRECRUITER" (randomListElement rn2 recruiters)
+        influenceeNodes_ =
+           filterNodes (\n -> List.member n.id influenceeNodeIDs) graph
+
+        influenceeNodes =
+            List.filter (\n -> n.label.value.numberRecruited < 2) influenceeNodes_
+
+        data = Debug.log "data" (List.map (\n ->  (n.id, n.label.value.numberRecruited)) influenceeNodes)
 
         recruiter =
-            recruiter_
-                |> Maybe.map (\n -> n.id)
+           randomListElement rn2 influenceeNodes
+           |> Maybe.map (\n -> n.id)
+
 
         freeNodes =
             filterNotGraph graph (\node -> node.label.value.status == Recruited)
-                -- nodeComplementOfGraph graph
-                --     (designatedRecruiter :: influencees_)
-                -- |> List.filter (\n -> n.parentGraphId > -1)
+
                 |> List.map (\n -> n.id)
                 |> List.filter (\id -> id /= 12)
 
-        -- |>  filterNodes filterNodeState graph
         rn3 =
             List.Extra.getAt 3 numbers
 
