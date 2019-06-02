@@ -133,7 +133,7 @@ hiddenTestGraph =
         , unrecruitedNodeState 1 "q3" ( 4, 6 )
         , unrecruitedNodeState 1 "q4" ( 18, 2 )
         , unrecruitedNodeState 1 "q5" ( 17, 8 )
-        , recruitedNodeState 0 "r" ( 8, 10 )
+        , recruitedNodeState 100 "r" ( 8, 10 )
         ]
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
@@ -464,17 +464,31 @@ recruitRandom numbers designatedRecruiter graph =
         -- recruiter =
         --     randomListElement rn2 influencees_
         recruiters =
-            filterNodes (\ns -> ns.status == Recruited && ns.numberRecruited < 2) graph
+            filterNodes
+                (\ns ->
+                    ns.status
+                        == Recruited
+                        && ns.numberRecruited
+                        < 2
+                        && ns.parentGraphId
+                        < 100
+                )
+                graph
+
+        recruiter_ =
+            Debug.log "theRECRUITER" (randomListElement rn2 recruiters)
 
         recruiter =
-            (randomListElement rn2 recruiters)
+            recruiter_
                 |> Maybe.map (\n -> n.id)
 
         freeNodes =
             filterNotGraph graph (\node -> node.label.value.status == Recruited)
                 -- nodeComplementOfGraph graph
                 --     (designatedRecruiter :: influencees_)
+                -- |> List.filter (\n -> n.parentGraphId > -1)
                 |> List.map (\n -> n.id)
+                |> List.filter (\id -> id /= 12)
 
         -- |>  filterNodes filterNodeState graph
         rn3 =
@@ -487,6 +501,7 @@ recruitRandom numbers designatedRecruiter graph =
             ( Just recruiterNodeId, Just recruiteeNodeId ) ->
                 connect recruiterNodeId recruiteeNodeId graph
                     |> setStatus recruiteeNodeId Recruited
+                    |> incrementRecruitedCount recruiterNodeId
 
             _ ->
                 graph

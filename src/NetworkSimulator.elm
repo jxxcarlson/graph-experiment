@@ -354,8 +354,7 @@ update msg model =
                     Grid.recruitedCount model.grid
 
                 influencees_ =
-                    Debug.log "INFL" <|
-                        Network.influencees model.recruiter model.graph
+                    Network.influencees model.recruiter model.graph
 
                 rn1 =
                     List.Extra.getAt 1 numbers
@@ -380,7 +379,14 @@ update msg model =
                                     model.graph
 
                                 Just recruiter_ ->
-                                    Network.recruitRandom numbers (Debug.log "REC" recruiter_) model.graph
+                                    let
+                                        _ =
+                                            Debug.log "MODREC" model.recruiter
+
+                                        _ =
+                                            Debug.log "INFL" influencees_
+                                    in
+                                        Network.recruitRandom numbers (Debug.log "REC" recruiter_) model.graph
 
                 -- Network.recruitRandomFreeNode numbers model.recruiter newGraph1
                 newGrid =
