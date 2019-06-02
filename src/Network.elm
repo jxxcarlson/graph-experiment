@@ -5,6 +5,7 @@ module Network
         , NodeState
         , defaultNodeState
         , connect
+        , incrementRecruitedCount
         , setStatus
         , hiddenTestGraph
         , testGraph
@@ -26,6 +27,7 @@ module Network
         , randomPairs
         , integerSequence
         , nodeState
+        , reheatGraph
         )
 
 import Force exposing (State)
@@ -47,8 +49,7 @@ type alias GraphId =
 type alias NodeState =
     { name : String
     , status : Status
-
-    -- , parentGraphId : GraphId
+    , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
     }
@@ -108,56 +109,56 @@ randomPairs modulus n seed =
     List.map2 Tuple.pair (integerSequence modulus n seed) (integerSequence modulus n (seed * seed))
 
 
-unrecruitedNodeState : String -> ( Int, Int ) -> NodeState
-unrecruitedNodeState name ( i, j ) =
-    { name = name, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
+unrecruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
+unrecruitedNodeState graphId name ( i, j ) =
+    { name = name, parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
 
 
-recruitedNodeState : String -> ( Int, Int ) -> NodeState
-recruitedNodeState name ( i, j ) =
-    { name = name, status = Recruited, numberRecruited = 0, location = ( i, j ) }
+recruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
+recruitedNodeState graphId name ( i, j ) =
+    { name = name, parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
 
 
 hiddenTestGraph =
     Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p0" ( 10, 18 )
-        , unrecruitedNodeState "12" ( 16, 15 )
-        , unrecruitedNodeState "p2" ( 13, 17 )
-        , unrecruitedNodeState "p3" ( 3, 12 )
-        , unrecruitedNodeState "p4" ( 19, 19 )
-        , unrecruitedNodeState "p5" ( 2, 1 )
-        , unrecruitedNodeState "q0" ( 9, 3 )
-        , unrecruitedNodeState "q1" ( 7, 13 )
-        , unrecruitedNodeState "q2" ( 11, 11 )
-        , unrecruitedNodeState "q3" ( 4, 6 )
-        , unrecruitedNodeState "q4" ( 18, 2 )
-        , unrecruitedNodeState "q5" ( 17, 8 )
-        , recruitedNodeState "r" ( 8, 10 )
+        [ unrecruitedNodeState 0 "p0" ( 10, 18 )
+        , unrecruitedNodeState 0 "p1" ( 16, 15 )
+        , unrecruitedNodeState 0 "p2" ( 13, 17 )
+        , unrecruitedNodeState 0 "p3" ( 3, 12 )
+        , unrecruitedNodeState 0 "p4" ( 19, 19 )
+        , unrecruitedNodeState 0 "p5" ( 2, 1 )
+        , unrecruitedNodeState 1 "q0" ( 9, 3 )
+        , unrecruitedNodeState 1 "q1" ( 7, 13 )
+        , unrecruitedNodeState 1 "q2" ( 11, 11 )
+        , unrecruitedNodeState 1 "q3" ( 4, 6 )
+        , unrecruitedNodeState 1 "q4" ( 18, 2 )
+        , unrecruitedNodeState 1 "q5" ( 17, 8 )
+        , recruitedNodeState 0 "r" ( 8, 10 )
         ]
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
 
 testGraph =
     Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState "p0" ( 10, 18 )
-        , unrecruitedNodeState "12" ( 16, 15 )
-        , unrecruitedNodeState "p2" ( 13, 17 )
-        , unrecruitedNodeState "p3" ( 3, 12 )
-        , unrecruitedNodeState "p4" ( 19, 19 )
-        , unrecruitedNodeState "p5" ( 2, 1 )
-        , unrecruitedNodeState "q0" ( 9, 3 )
-        , unrecruitedNodeState "q1" ( 7, 13 )
-        , unrecruitedNodeState "q2" ( 11, 11 )
-        , unrecruitedNodeState "q3" ( 4, 6 )
-        , unrecruitedNodeState "q4" ( 18, 2 )
-        , unrecruitedNodeState "q5" ( 17, 8 )
-        , recruitedNodeState "r" ( 8, 10 )
+        [ unrecruitedNodeState 0 "p0" ( 10, 18 )
+        , unrecruitedNodeState 0 "p1" ( 16, 15 )
+        , unrecruitedNodeState 0 "p2" ( 13, 17 )
+        , unrecruitedNodeState 0 "p3" ( 3, 12 )
+        , unrecruitedNodeState 0 "p4" ( 19, 19 )
+        , unrecruitedNodeState 0 "p5" ( 2, 1 )
+        , unrecruitedNodeState 1 "q0" ( 9, 3 )
+        , unrecruitedNodeState 1 "q1" ( 7, 13 )
+        , unrecruitedNodeState 1 "q2" ( 11, 11 )
+        , unrecruitedNodeState 1 "q3" ( 4, 6 )
+        , unrecruitedNodeState 1 "q4" ( 18, 2 )
+        , unrecruitedNodeState 1 "q5" ( 17, 8 )
+        , recruitedNodeState 100 "r" ( 8, 10 )
         ]
         []
 
 
 defaultNodeState =
-    { name = "", status = NotRecruited, numberRecruited = 0, location = ( 0, 0 ) }
+    { name = "", status = NotRecruited, parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
 
 initializeNode : NodeContext NodeState () -> NodeContext Entity ()
@@ -172,6 +173,26 @@ setupGraph :
     Graph.Graph NodeState ()
     -> ( List (Force.Force Int), Graph.Graph Entity () )
 setupGraph inputGraph =
+    let
+        outputGraph =
+            Graph.mapContexts initializeNode inputGraph
+
+        link { from, to } =
+            ( from, to )
+
+        forces =
+            [ Force.links <| List.map link <| Graph.edges outputGraph
+            , Force.manyBody <| List.map .id <| Graph.nodes outputGraph
+            , Force.center (500 / 2) (500 / 2)
+            ]
+    in
+        ( forces, outputGraph )
+
+
+reheatGraph :
+    Graph.Graph NodeState ()
+    -> ( List (Force.Force Int), Graph.Graph Entity () )
+reheatGraph inputGraph =
     let
         outputGraph =
             Graph.mapContexts initializeNode inputGraph
@@ -203,6 +224,7 @@ setStatus nodeIndex status graph =
                     | value =
                         { name = n.value.name
                         , status = status
+                        , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
                         }
@@ -236,6 +258,26 @@ connect from to graph =
 
         Just ctx ->
             Graph.insert ctx graph
+
+
+incrementRecruitedCount : NodeId -> Graph Entity () -> Graph Entity ()
+incrementRecruitedCount nodeId graph =
+    Graph.mapNodes
+        (\n ->
+            if n.id == nodeId then
+                { n
+                    | value =
+                        { name = n.value.name
+                        , status = n.value.status
+                        , parentGraphId = n.value.parentGraphId
+                        , numberRecruited = n.value.numberRecruited + 1
+                        , location = n.value.location
+                        }
+                }
+            else
+                n
+        )
+        graph
 
 
 connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity () -> Graph Entity ()
@@ -347,6 +389,12 @@ nodeComplementOfGraph graph nodeExclusionList =
         |> List.Extra.filterNot (\item -> List.member item.id nodeExclusionList)
 
 
+filterNotGraph : Graph n e -> (Node n -> Bool) -> List (Node n)
+filterNotGraph graph filter =
+    Graph.nodes graph
+        |> List.Extra.filterNot filter
+
+
 recruitNodes : List Float -> NodeId -> Graph Entity () -> Graph Entity () -> Graph Entity ()
 recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
     let
@@ -398,6 +446,7 @@ recruitRandomFreeNode numbers recruiter graph =
             Just nodeId_ ->
                 connect recruiter nodeId_ graph
                     |> setStatus nodeId_ Recruited
+                    |> incrementRecruitedCount recruiter
 
 
 {-| A random influencee whose recruitedCount is 0 or 1
@@ -422,8 +471,9 @@ recruitRandom numbers designatedRecruiter graph =
                 |> Maybe.map (\n -> n.id)
 
         freeNodes =
-            nodeComplementOfGraph graph
-                (designatedRecruiter :: influencees_)
+            filterNotGraph graph (\node -> node.label.value.status == Recruited)
+                -- nodeComplementOfGraph graph
+                --     (designatedRecruiter :: influencees_)
                 |> List.map (\n -> n.id)
 
         -- |>  filterNodes filterNodeState graph

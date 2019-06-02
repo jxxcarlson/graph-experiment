@@ -18,6 +18,7 @@ type CellStatus
 type alias Cell =
     { status : CellStatus
     , name : String
+    , parentGraphId : Int
     , id : Int
     }
 
@@ -30,15 +31,15 @@ cellFromEntity entity =
     in
         case nodeState_.status of
             Network.Recruited ->
-                { id = entity.id, name = nodeState_.name, status = Recruited }
+                { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = Recruited }
 
             Network.NotRecruited ->
-                { id = entity.id, name = nodeState_.name, status = NotRecruited }
+                { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = NotRecruited }
 
 
 empty : Int -> Int -> CellGrid Cell
 empty rows columns =
-    CellGrid.fromList rows columns (List.repeat (rows * columns) { id = -1, name = "", status = Vacant })
+    CellGrid.fromList rows columns (List.repeat (rows * columns) { id = -1, parentGraphId = 0, name = "", status = Vacant })
         |> Maybe.withDefault CellGrid.empty
 
 

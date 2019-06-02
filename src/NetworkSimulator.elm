@@ -1,4 +1,4 @@
-port module NetworkSimulator exposing (main, Msg(..))
+port module NetworkSimulator exposing (main, Msg(..), cellRenderer)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -21,9 +21,9 @@ import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Time
-import TypedSvg exposing (circle, g, line, svg, title, text_)
+import TypedSvg exposing (circle, rect, g, line, svg, title, text_)
 import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, fontSize, transform)
-import TypedSvg.Attributes.InPx exposing (cx, cy, r, strokeWidth, x1, x2, y1, y2)
+import TypedSvg.Attributes.InPx as Apx exposing (x, y, cx, cy, r, strokeWidth, x1, x2, y1, y2)
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 import Random
@@ -36,8 +36,12 @@ gameTimeInterval =
     1000
 
 
-searchForInfluencersInterval =
-    4
+recruitInterval =
+    8
+
+
+recruitStep =
+    recruitInterval // 2
 
 
 gridWidth =
@@ -248,9 +252,18 @@ update msg model =
                     associatedOutgoingNodeIds =
                         (Network.outGoingNodeIds index model.hiddenGraph)
 
+                    audioMsg =
+                        case List.length associatedOutgoingNodeIds == 0 of
+                            True ->
+                                Chirp
+
+                            False ->
+                                LongChirp
+
                     newGraph =
                         Network.setStatus index Recruited model.graph
                             |> Network.connect model.recruiter index
+                            |> Network.incrementRecruitedCount model.recruiter
                             |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
 
                     newGrid =
@@ -265,7 +278,7 @@ update msg model =
                         , simulation = (Force.simulation forces)
                         , clickCount = model.clickCount + 1
                     }
-                        |> putCmd Cmd.none
+                        |> putCmd (sendAudioMessage audioMsg)
 
         DragAt xy ->
             case model.drag of
@@ -305,7 +318,7 @@ update msg model =
                             Running
 
                         GameOver ->
-                            GameOver
+                            Ready
 
                         GameEnding ->
                             GameOver
@@ -340,28 +353,38 @@ update msg model =
                 recruitCount1 =
                     Grid.recruitedCount model.grid
 
-                newGraph1 =
-                    -- The designated recruiter (model.recruiter) recruits a new node if tne gameClock is
-                    -- zero mod N, N = searchForInfluencersInterval
-                    case model.gameState == Running && modBy searchForInfluencersInterval model.gameClock == 0 of
-                        True ->
-                            Network.recruitNodes numbers model.recruiter model.graph model.hiddenGraph
+                influencees_ =
+                    Debug.log "INFL" <|
+                        Network.influencees model.recruiter model.graph
 
+                rn1 =
+                    List.Extra.getAt 1 numbers
+
+                maybeRecruiter =
+                    Network.randomListElement rn1 influencees_
+
+                newGraph =
+                    -- New recruitees recruit other nodes at random
+                    case
+                        model.gameState
+                            == Running
+                            && modBy recruitInterval model.gameClock
+                            == recruitStep
+                    of
                         False ->
                             model.graph
 
-                newGraph2 =
-                    -- New recruitees recruit other nodes at random
-                    case model.gameState == Running && modBy 4 model.gameClock == 0 && Network.influencees model.recruiter newGraph1 /= [] of
-                        False ->
-                            newGraph1
-
                         True ->
-                            Network.recruitRandom numbers model.recruiter newGraph1
+                            case maybeRecruiter of
+                                Nothing ->
+                                    model.graph
+
+                                Just recruiter_ ->
+                                    Network.recruitRandom numbers (Debug.log "REC" recruiter_) model.graph
 
                 -- Network.recruitRandomFreeNode numbers model.recruiter newGraph1
                 newGrid =
-                    Grid.cellGridFromGraph gridWidth newGraph2
+                    Grid.cellGridFromGraph gridWidth newGraph
 
                 recruitCount2 =
                     Grid.recruitedCount newGrid
@@ -394,7 +417,7 @@ update msg model =
             in
                 ( { model
                     | randomNumberList = numbers
-                    , graph = newGraph2
+                    , graph = newGraph
                     , grid = newGrid
                     , gameState = newGameState
                   }
@@ -413,6 +436,7 @@ update msg model =
                     | gameState = Ready
                     , gameClock = 0
                     , graph = graph
+                    , simulation = (Force.simulation forces)
                     , grid = Grid.cellGridFromGraph gridWidth graph
                   }
                 , Cmd.none
@@ -447,13 +471,14 @@ update msg model =
                             newGraph =
                                 Network.setStatus index Recruited model.graph
                                     |> Network.connect model.recruiter index
+                                    |> Network.incrementRecruitedCount model.recruiter
                                     |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
 
                             newGrid =
                                 Grid.cellGridFromGraph gridWidth newGraph
 
                             message =
-                                "CHIRP1, Grid, node = " ++ String.fromInt index ++ ", (i,j) = (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")"
+                                ""
                         in
                             ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
 
@@ -514,8 +539,8 @@ linkElement graph edge =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
     in
         line
-            [ strokeWidth 1
-            , stroke (Color.rgb255 170 170 170)
+            [ strokeWidth 2
+            , stroke (Color.rgb255 255 255 255)
             , x1 source.x
             , y1 source.y
             , x2 target.x
@@ -538,10 +563,7 @@ nodeElement model node =
         g []
             [ circle
                 [ r 14.0
-                , if node.label.value.status == NotRecruited then
-                    fill (Fill (Color.rgba 0.3 0 1 1.0))
-                  else
-                    fill (Fill (Color.rgba 1.0 0 0.3 1.0))
+                , nodeColorizer node
                 , stroke (Color.rgba 0 0 0 0)
                 , strokeWidth 7
                 , mouseHandler node.id
@@ -556,6 +578,26 @@ nodeElement model node =
                 ]
                 [ Svg.text node.label.value.name ]
             ]
+
+
+nodeColorizer node =
+    case node.label.value.status of
+        NotRecruited ->
+            fill (Fill (Color.rgb255 0 0 255))
+
+        Recruited ->
+            case node.label.value.parentGraphId of
+                100 ->
+                    fill (Fill (Color.rgb255 244 65 238))
+
+                0 ->
+                    fill (Fill (Color.rgb255 66 244 137))
+
+                1 ->
+                    fill (Fill (Color.rgb255 244 128 65))
+
+                _ ->
+                    fill (Fill (Color.rgb255 244 65 238))
 
 
 
@@ -592,8 +634,6 @@ infoPanel model =
     column [ spacing 12, width (px 450), padding 40, Border.width 1 ]
         [ el [ alignTop ] (text "SIMULATION")
         , el [ Font.size 14 ] (text "Click on nodes to 'recruit' them.")
-        , el [ Font.size 14 ] (text "Clicking certain nodes will automatically recruit others.")
-        , el [ Font.size 14 ] (text "Why?")
         , row [ spacing 18 ] [ displayGraphButton model, displayGridButton model ]
         , row [ Font.size 12 ] [ el [] (text model.message) ]
         ]
@@ -617,8 +657,7 @@ controlPanel model =
             , resetButton model
             ]
         , influenceesDisplay model
-
-        -- , influenceesDisplay2 model
+        , influenceesDisplay2 model
         ]
 
 
@@ -703,13 +742,25 @@ viewGrid model w h =
     CellGrid.renderAsHtml 500 500 cellRenderer model.grid |> Html.map CellGrid
 
 
+cellRenderer : CellRenderer Grid.Cell
 cellRenderer =
     { cellSize = 25
     , cellColorizer =
         \cell ->
             case cell.status of
                 Grid.Recruited ->
-                    Color.rgb 1 0 0
+                    case cell.parentGraphId of
+                        100 ->
+                            Color.rgb255 244 65 238
+
+                        0 ->
+                            Color.rgb255 66 244 137
+
+                        1 ->
+                            Color.rgb255 244 128 65
+
+                        _ ->
+                            Color.rgb255 244 65 238
 
                 Grid.NotRecruited ->
                     Color.rgb 0 0 1
@@ -726,7 +777,8 @@ cellRenderer =
 viewGraph : Model -> Float -> Float -> Html Msg
 viewGraph model w h =
     svg [ viewBox 0 0 w h ]
-        [ Graph.edges model.graph
+        [ rect [ x 0, y 0, Apx.width w, Apx.height h ] []
+        , Graph.edges model.graph
             |> List.map (linkElement model.graph)
             |> g [ class [ "links" ] ]
         , Graph.nodes model.graph
