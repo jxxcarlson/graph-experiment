@@ -1,4 +1,4 @@
-port module NetworkSimulator exposing (main, Msg(..), cellRenderer)
+port module NetworkSimulator exposing (Msg(..), cellRenderer, main)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -6,30 +6,30 @@ based on their co-occurence in a scene. Try dragging the nodes!
 
 import Browser
 import Browser.Events
+import CellGrid exposing (CellGrid, CellRenderer)
 import Color
-import Force exposing (State)
-import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import Element exposing (..)
 import Element.Background as Background
+import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
-import IntDict
-import Network exposing (Entity, Status(..), NodeState)
-import Element.Border as Border
+import Force exposing (State)
+import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
+import Grid
 import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
+import IntDict
 import Json.Decode as Decode
 import Json.Encode as Encode
+import List.Extra
+import Network exposing (Entity, NodeState, Status(..))
+import Random
 import Time
-import TypedSvg exposing (circle, rect, g, line, svg, title, text_)
-import TypedSvg.Attributes exposing (class, fill, stroke, viewBox, fontSize, transform)
-import TypedSvg.Attributes.InPx as Apx exposing (x, y, cx, cy, r, strokeWidth, x1, x2, y1, y2)
+import TypedSvg exposing (circle, g, line, rect, svg, text_, title)
+import TypedSvg.Attributes exposing (class, fill, fontSize, stroke, transform, viewBox)
+import TypedSvg.Attributes.InPx as Apx exposing (cx, cy, r, strokeWidth, x, x1, x2, y, y1, y2)
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
-import Random
-import List.Extra
-import CellGrid exposing (CellGrid, CellRenderer)
-import Grid
 
 
 gameTimeInterval =
@@ -138,22 +138,22 @@ init _ =
         hiddenGraph =
             Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
-        ( { drag = Nothing
-          , graph = graph
-          , recruiter = 12
-          , clickCount = 0
-          , hiddenGraph = hiddenGraph
-          , graphBehavior = Selectable
-          , simulation = (Force.simulation forces)
-          , message = "No message yet"
-          , gameClock = 0
-          , gameState = Ready
-          , randomNumberList = []
-          , displayMode = DisplayGrid
-          , grid = Grid.cellGridFromGraph gridWidth graph -- Grid.empty gridWidth gridWidth
-          }
-        , Cmd.none
-        )
+    ( { drag = Nothing
+      , graph = graph
+      , recruiter = 12
+      , clickCount = 0
+      , hiddenGraph = hiddenGraph
+      , graphBehavior = Selectable
+      , simulation = Force.simulation forces
+      , message = "No message yet"
+      , gameClock = 0
+      , gameState = Ready
+      , randomNumberList = []
+      , displayMode = DisplayGrid
+      , grid = Grid.cellGridFromGraph gridWidth graph -- Grid.empty gridWidth gridWidth
+      }
+    , Cmd.none
+    )
 
 
 type AudioMessage
@@ -197,7 +197,7 @@ updateNode ( x, y ) nodeCtx =
         nodeValue =
             nodeCtx.node.label
     in
-        Network.updateContextWithValue nodeCtx { nodeValue | x = x, y = y }
+    Network.updateContextWithValue nodeCtx { nodeValue | x = x, y = y }
 
 
 updateGraphWithList : Graph Entity () -> List Entity -> Graph Entity ()
@@ -206,7 +206,7 @@ updateGraphWithList =
         graphUpdater value =
             Maybe.map (\ctx -> Network.updateContextWithValue ctx value)
     in
-        List.foldr (\node graph -> Graph.update node.id (graphUpdater node) graph)
+    List.foldr (\node graph -> Graph.update node.id (graphUpdater node) graph)
 
 
 putCmd : Cmd Msg -> Model -> ( Model, Cmd Msg )
@@ -222,13 +222,13 @@ update msg model =
                 ( newState, list ) =
                     Force.tick model.simulation <| List.map .label <| Graph.nodes model.graph
             in
-                case model.drag of
-                    Nothing ->
-                        { model | graph = updateGraphWithList model.graph list, simulation = newState } |> putCmd Cmd.none
+            case model.drag of
+                Nothing ->
+                    { model | graph = updateGraphWithList model.graph list, simulation = newState } |> putCmd Cmd.none
 
-                    Just { current, index } ->
-                        { model | graph = (Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list)) }
-                            |> putCmd Cmd.none
+                Just { current, index } ->
+                    { model | graph = Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) }
+                        |> putCmd Cmd.none
 
         GameTick t ->
             case model.gameState of
@@ -244,13 +244,14 @@ update msg model =
         MouseClick index xy ->
             if model.gameState /= Running then
                 ( model, Cmd.none )
+
             else
                 let
                     associatedIncomingNodeIds =
-                        (Network.inComingNodeIds index model.hiddenGraph)
+                        Network.inComingNodeIds index model.hiddenGraph
 
                     associatedOutgoingNodeIds =
-                        (Network.outGoingNodeIds index model.hiddenGraph)
+                        Network.outGoingNodeIds index model.hiddenGraph
 
                     audioMsg =
                         case List.length associatedOutgoingNodeIds == 0 of
@@ -272,13 +273,13 @@ update msg model =
                     forces =
                         Network.computeForces newGraph
                 in
-                    { model
-                        | graph = newGraph
-                        , grid = newGrid
-                        , simulation = (Force.simulation forces)
-                        , clickCount = model.clickCount + 1
-                    }
-                        |> putCmd (sendAudioMessage audioMsg)
+                { model
+                    | graph = newGraph
+                    , grid = newGrid
+                    , simulation = Force.simulation forces
+                    , clickCount = model.clickCount + 1
+                }
+                    |> putCmd (sendAudioMessage audioMsg)
 
         DragAt xy ->
             case model.drag of
@@ -323,24 +324,24 @@ update msg model =
                         GameEnding ->
                             GameOver
             in
-                case model.gameState of
-                    GameOver ->
-                        let
-                            ( forces, graph ) =
-                                Network.setupGraph Network.testGraph
-                        in
-                            { model
-                                | graph = graph
-                                , grid = Grid.cellGridFromGraph gridWidth graph
-                                , simulation = (Force.simulation forces)
-                                , clickCount = 0
-                                , gameClock = 0
-                                , gameState = newGameState
-                            }
-                                |> putCmd Cmd.none
+            case model.gameState of
+                GameOver ->
+                    let
+                        ( forces, graph ) =
+                            Network.setupGraph Network.testGraph
+                    in
+                    { model
+                        | graph = graph
+                        , grid = Grid.cellGridFromGraph gridWidth graph
+                        , simulation = Force.simulation forces
+                        , clickCount = 0
+                        , gameClock = 0
+                        , gameState = newGameState
+                    }
+                        |> putCmd Cmd.none
 
-                    _ ->
-                        { model | gameState = newGameState } |> putCmd Cmd.none
+                _ ->
+                    { model | gameState = newGameState } |> putCmd Cmd.none
 
         ReHeat ->
             { model | simulation = Force.reheat model.simulation } |> putCmd Cmd.none
@@ -365,9 +366,7 @@ update msg model =
                             model.graph
 
                         True ->
-
                             Network.recruitRandom numbers model.recruiter model.graph
-
 
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph
@@ -380,15 +379,15 @@ update msg model =
                         everyoneRecruited =
                             Grid.recruitedCount model.grid == Graph.size model.graph
                     in
-                        case ( model.gameState, everyoneRecruited ) of
-                            ( Running, True ) ->
-                                GameEnding
+                    case ( model.gameState, everyoneRecruited ) of
+                        ( Running, True ) ->
+                            GameEnding
 
-                            ( GameEnding, _ ) ->
-                                GameOver
+                        ( GameEnding, _ ) ->
+                            GameOver
 
-                            _ ->
-                                model.gameState
+                        _ ->
+                            model.gameState
 
                 audioMsg =
                     case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
@@ -401,14 +400,14 @@ update msg model =
                         _ ->
                             Silence
             in
-                ( { model
-                    | randomNumberList = numbers
-                    , graph = newGraph
-                    , grid = newGrid
-                    , gameState = newGameState
-                  }
-                , sendAudioMessage audioMsg
-                )
+            ( { model
+                | randomNumberList = numbers
+                , graph = newGraph
+                , grid = newGrid
+                , gameState = newGameState
+              }
+            , sendAudioMessage audioMsg
+            )
 
         SetDisplayMode displayMode ->
             ( { model | displayMode = displayMode }, Cmd.none )
@@ -418,20 +417,21 @@ update msg model =
                 ( forces, graph ) =
                     Network.setupGraph Network.testGraph
             in
-                ( { model
-                    | gameState = Ready
-                    , gameClock = 0
-                    , clickCount = 0
-                    , graph = graph
-                    , simulation = (Force.simulation forces)
-                    , grid = Grid.cellGridFromGraph gridWidth graph
-                  }
-                , Cmd.none
-                )
+            ( { model
+                | gameState = Ready
+                , gameClock = 0
+                , clickCount = 0
+                , graph = graph
+                , simulation = Force.simulation forces
+                , grid = Grid.cellGridFromGraph gridWidth graph
+              }
+            , Cmd.none
+            )
 
         CellGrid msg_ ->
             if model.gameState /= Running then
                 ( model, Cmd.none )
+
             else
                 case msg_ of
                     CellGrid.MouseClick ( i, j ) ( x, y ) ->
@@ -445,7 +445,7 @@ update msg model =
                                         cell.id
 
                             associatedOutgoingNodeIds =
-                                (Network.outGoingNodeIds index model.hiddenGraph)
+                                Network.outGoingNodeIds index model.hiddenGraph
 
                             audioMsg =
                                 case List.length associatedOutgoingNodeIds == 0 of
@@ -467,7 +467,7 @@ update msg model =
                             message =
                                 ""
                         in
-                            ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
+                        ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
 
 
 getRandomNumbers : Cmd Msg
@@ -488,6 +488,7 @@ simulationSubscription model =
             -- to the rAF.
             if Force.isCompleted model.simulation then
                 Sub.none
+
             else
                 Browser.Events.onAnimationFrame Tick
 
@@ -525,15 +526,15 @@ linkElement graph edge =
         target =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
     in
-        line
-            [ strokeWidth 2
-            , stroke (Color.rgb255 255 255 255)
-            , x1 source.x
-            , y1 source.y
-            , x2 target.x
-            , y2 target.y
-            ]
-            []
+    line
+        [ strokeWidth 2
+        , stroke (Color.rgb255 255 255 255)
+        , x1 source.x
+        , y1 source.y
+        , x2 target.x
+        , y2 target.y
+        ]
+        []
 
 
 nodeElement : Model -> Node { a | value : NodeState, x : Float, y : Float } -> Svg Msg
@@ -547,24 +548,24 @@ nodeElement model node =
                 Draggable ->
                     onMouseDown
     in
-        g []
-            [ circle
-                [ r 14.0
-                , nodeColorizer node
-                , stroke (Color.rgba 0 0 0 0)
-                , strokeWidth 7
-                , mouseHandler node.id
-                , cx node.label.x
-                , cy node.label.y
-                ]
-                [ title [] [ Svg.text node.label.value.name ] ]
-            , text_
-                [ transform [ Translate (node.label.x - 6) (node.label.y + 3) ]
-                , (fontSize (Px 12))
-                , stroke (Color.rgba 1 1 1 1)
-                ]
-                [ Svg.text node.label.value.name ]
+    g []
+        [ circle
+            [ r 14.0
+            , nodeColorizer node
+            , stroke (Color.rgba 0 0 0 0)
+            , strokeWidth 7
+            , mouseHandler node.id
+            , cx node.label.x
+            , cy node.label.y
             ]
+            [ title [] [ Svg.text node.label.value.name ] ]
+        , text_
+            [ transform [ Translate (node.label.x - 6) (node.label.y + 3) ]
+            , fontSize (Px 12)
+            , stroke (Color.rgba 1 1 1 1)
+            ]
+            [ Svg.text node.label.value.name ]
+        ]
 
 
 nodeColorizer node =
@@ -654,16 +655,16 @@ influenceesDisplay model =
                 |> List.map String.fromInt
                 |> String.join ", "
     in
-        el [] (text <| "Influencees: " ++ ii)
+    el [] (text <| "Influencees: " ++ ii)
 
 
 recruitedDisplay : Model -> Element Msg
 recruitedDisplay model =
     let
         n =
-            (Grid.recruitedCount model.grid) - 1 |> String.fromInt
+            Grid.recruitedCount model.grid - 1 |> String.fromInt
     in
-        el [] (text <| "Recruited: " ++ n)
+    el [] (text <| "Recruited: " ++ n)
 
 
 influenceesDisplay2 : Model -> Element Msg
@@ -674,7 +675,7 @@ influenceesDisplay2 model =
                 |> List.map String.fromInt
                 |> String.join ", "
     in
-        el [] (text <| "Influencees2 of p4: " ++ ii)
+    el [] (text <| "Influencees2 of p4: " ++ ii)
 
 
 clockIndicator : Model -> Element Msg
@@ -702,7 +703,7 @@ scoreIndicator model =
         score =
             round <| (30 * rn - 20 * cc - 2.5 * gc)
     in
-        el [ Font.size 24, Font.bold ] (text <| "Score: " ++ String.fromInt score)
+    el [ Font.size 24, Font.bold ] (text <| "Score: " ++ String.fromInt score)
 
 
 recruitedNodes : Model -> List NodeId
@@ -806,7 +807,7 @@ displayGridButton model =
 startOverButton : Model -> Element Msg
 startOverButton model =
     Input.button (buttonStyle [ Background.color charcoal ])
-        { onPress = Just (AdvanceGameState)
+        { onPress = Just AdvanceGameState
         , label = el [] (text <| controlButtonTitle model)
         }
 
@@ -814,7 +815,7 @@ startOverButton model =
 resetButton : Model -> Element Msg
 resetButton model =
     Input.button (buttonStyle [ Background.color charcoal ])
-        { onPress = Just (ResetGame)
+        { onPress = Just ResetGame
         , label = el [] (text <| "Reset")
         }
 
@@ -841,7 +842,7 @@ controlButtonTitle model =
 reheatButton : Model -> Element Msg
 reheatButton model =
     Input.button (buttonStyle [ Background.color charcoal ])
-        { onPress = Just (ReHeat)
+        { onPress = Just ReHeat
         , label = el [] (text "Arrange")
         }
 

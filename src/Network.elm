@@ -1,40 +1,40 @@
-module Network
-    exposing
-        ( Entity
-        , Status(..)
-        , NodeState
-        , defaultNodeState
-        , connect
-        , incrementRecruitedCount
-        , setStatus
-        , hiddenTestGraph
-        , testGraph
-        , initializeNode
-        , updateContextWithValue
-        , outGoingNodeIds
-        , inComingNodeIds
-        , connectNodeToNodeInList
-        , setupGraph
-        , computeForces
-        , influencees
-        , influencers
-        , influencees2
-        , recruitNodes
-        , nodeComplementOfGraph
-        , recruitRandomFreeNode
-        , recruitRandom
-        , randomListElement
-        , randomPairs
-        , integerSequence
-        , nodeState
-        , reheatGraph
-        )
+module Network exposing
+    ( Entity
+    , NodeState
+    , Status(..)
+    , computeForces
+    , connect
+    , connectNodeToNodeInList
+    , defaultNodeState
+    , hiddenTestGraph
+    , inComingNodeIds
+    , incrementRecruitedCount
+    , influencees
+    , influencees2
+    , influencers
+    , initializeNode
+    , integerSequence
+    , nodeComplementOfGraph
+    , nodeState
+    , outGoingNodeIds
+    , randomListElement
+    , randomPairs
+    , recruitNodes
+    , recruitRandom
+    , recruitRandomFreeNode
+    , reheatGraph
+    , setStatus
+    , setupGraph
+    , testGraph
+    , updateContextWithValue
+    )
 
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict
-import PseudoRandom
 import List.Extra
+import PseudoRandom
+
 
 
 --
@@ -49,6 +49,7 @@ type alias GraphId =
 type alias NodeState =
     { name : String
     , status : Status
+    , accountBalance : Int
     , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
@@ -62,8 +63,9 @@ filterNodesOnState filterNodeState graph =
         filterNode node =
             node.label |> nodeState |> filterNodeState
     in
-        Graph.nodes graph
-            |> List.filter filterNode
+    Graph.nodes graph
+        |> List.filter filterNode
+
 
 filterNodes : (Entity -> Bool) -> Graph Entity () -> List (Node Entity)
 filterNodes filterNode_ graph =
@@ -72,8 +74,8 @@ filterNodes filterNode_ graph =
         filterNode node =
             node.label |> filterNode_
     in
-        Graph.nodes graph
-            |> List.filter filterNode
+    Graph.nodes graph
+        |> List.filter filterNode
 
 
 type Status
@@ -109,7 +111,7 @@ distributeLocations graph =
 integerSequence : Int -> Int -> Int -> List Int
 integerSequence modulus n seed =
     PseudoRandom.floatSequence n seed ( 0, 1 )
-        |> List.map (\x -> round ((toFloat modulus) * x))
+        |> List.map (\x -> round (toFloat modulus * x))
         |> List.Extra.unique
         |> List.filter (\x -> x < modulus)
 
@@ -121,12 +123,12 @@ randomPairs modulus n seed =
 
 unrecruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
 unrecruitedNodeState graphId name ( i, j ) =
-    { name = name, parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
+    { name = name, accountBalance = 0, parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
 
 
 recruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
 recruitedNodeState graphId name ( i, j ) =
-    { name = name, parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
+    { name = name, accountBalance = 0, parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
 
 
 hiddenTestGraph =
@@ -168,7 +170,7 @@ testGraph =
 
 
 defaultNodeState =
-    { name = "", status = NotRecruited, parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
+    { name = "", status = NotRecruited, accountBalance = 0, parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
 
 initializeNode : NodeContext NodeState () -> NodeContext Entity ()
@@ -196,7 +198,7 @@ setupGraph inputGraph =
             , Force.center (500 / 2) (500 / 2)
             ]
     in
-        ( forces, outputGraph )
+    ( forces, outputGraph )
 
 
 reheatGraph :
@@ -216,7 +218,7 @@ reheatGraph inputGraph =
             , Force.center (500 / 2) (500 / 2)
             ]
     in
-        ( forces, outputGraph )
+    ( forces, outputGraph )
 
 
 
@@ -234,11 +236,13 @@ setStatus nodeIndex status graph =
                     | value =
                         { name = n.value.name
                         , status = status
+                        , accountBalance = n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
                         }
                 }
+
             else
                 n
         )
@@ -251,7 +255,7 @@ updateContextWithValue nodeCtx value =
         node =
             nodeCtx.node
     in
-        { nodeCtx | node = { node | label = value } }
+    { nodeCtx | node = { node | label = value } }
 
 
 
@@ -279,11 +283,13 @@ incrementRecruitedCount nodeId graph =
                     | value =
                         { name = n.value.name
                         , status = n.value.status
+                        , accountBalance = n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited + 1
                         , location = n.value.location
                         }
                 }
+
             else
                 n
         )
@@ -370,7 +376,7 @@ influencees2b nodeId graph =
 
 scale : Float -> Int -> Int
 scale x n =
-    round (x * (toFloat n))
+    round (x * toFloat n)
 
 
 randomListElement : Maybe Float -> List a -> Maybe a
@@ -387,7 +393,7 @@ randomListElement maybeRandomNumber list =
                 i =
                     scale rn (n - 1)
             in
-                List.Extra.getAt i list
+            List.Extra.getAt i list
 
 
 {-| Return the list of nodes of graph that are not in
@@ -423,13 +429,13 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
             secondOrderInfluencees
                 |> randomListElement (List.Extra.getAt 0 rnList)
     in
-        case randomSecondOrderInfluenceeNodeId of
-            Nothing ->
-                currentGraph
+    case randomSecondOrderInfluenceeNodeId of
+        Nothing ->
+            currentGraph
 
-            Just newNodeId ->
-                connect recruiterNode newNodeId currentGraph
-                    |> setStatus newNodeId Recruited
+        Just newNodeId ->
+            connect recruiterNode newNodeId currentGraph
+                |> setStatus newNodeId Recruited
 
 
 {-| The recruiter recruits a free node at random
@@ -440,7 +446,7 @@ recruitRandomFreeNode numbers recruiter graph =
         freeNodes : List NodeId
         freeNodes =
             nodeComplementOfGraph graph
-                ((influencees recruiter graph) ++ [ recruiter ])
+                (influencees recruiter graph ++ [ recruiter ])
                 |> List.map (\n -> n.id)
 
         rn2 =
@@ -449,14 +455,14 @@ recruitRandomFreeNode numbers recruiter graph =
         freeNode =
             randomListElement rn2 freeNodes
     in
-        case freeNode of
-            Nothing ->
-                graph
+    case freeNode of
+        Nothing ->
+            graph
 
-            Just nodeId_ ->
-                connect recruiter nodeId_ graph
-                    |> setStatus nodeId_ Recruited
-                    |> incrementRecruitedCount recruiter
+        Just nodeId_ ->
+            connect recruiter nodeId_ graph
+                |> setStatus nodeId_ Recruited
+                |> incrementRecruitedCount recruiter
 
 
 {-| A random influencee whose recruitedCount is 0 or 1
@@ -471,23 +477,21 @@ recruitRandom numbers designatedRecruiter graph =
         influenceeNodeIDs =
             influencees designatedRecruiter graph
 
-
         influenceeNodes_ =
-           filterNodes (\n -> List.member n.id influenceeNodeIDs) graph
+            filterNodes (\n -> List.member n.id influenceeNodeIDs) graph
 
         influenceeNodes =
             List.filter (\n -> n.label.value.numberRecruited < 2) influenceeNodes_
 
-        data = Debug.log "data" (List.map (\n ->  (n.id, n.label.value.numberRecruited)) influenceeNodes)
+        data =
+            Debug.log "data" (List.map (\n -> ( n.id, n.label.value.numberRecruited )) influenceeNodes)
 
         recruiter =
-           randomListElement rn2 influenceeNodes
-           |> Maybe.map (\n -> n.id)
-
+            randomListElement rn2 influenceeNodes
+                |> Maybe.map (\n -> n.id)
 
         freeNodes =
             filterNotGraph graph (\node -> node.label.value.status == Recruited)
-
                 |> List.map (\n -> n.id)
                 |> List.filter (\id -> id /= 12)
 
@@ -497,14 +501,14 @@ recruitRandom numbers designatedRecruiter graph =
         freeNode =
             randomListElement rn3 freeNodes
     in
-        case ( recruiter, freeNode ) of
-            ( Just recruiterNodeId, Just recruiteeNodeId ) ->
-                connect recruiterNodeId recruiteeNodeId graph
-                    |> setStatus recruiteeNodeId Recruited
-                    |> incrementRecruitedCount recruiterNodeId
+    case ( recruiter, freeNode ) of
+        ( Just recruiterNodeId, Just recruiteeNodeId ) ->
+            connect recruiterNodeId recruiteeNodeId graph
+                |> setStatus recruiteeNodeId Recruited
+                |> incrementRecruitedCount recruiterNodeId
 
-            _ ->
-                graph
+        _ ->
+            graph
 
 
 consIfDefined : Maybe a -> List a -> List a
@@ -534,10 +538,10 @@ computeForces graph =
         link { from, to } =
             ( from, to )
     in
-        [ Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
-        , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
-        , Force.center (500 / 2) (500 / 2)
-        ]
+    [ Force.customLinks 1 <| List.map alterLink <| List.map link <| Graph.edges graph
+    , Force.manyBodyStrength -1.8 (List.map .id <| Graph.nodes graph)
+    , Force.center (500 / 2) (500 / 2)
+    ]
 
 
 alterLink ( from, to ) =
