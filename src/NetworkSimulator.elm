@@ -22,7 +22,7 @@ import IntDict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import List.Extra
-import Network exposing (Entity, NodeState, Status(..))
+import Network exposing (Entity, NodeState, Status(..), moneySupply)
 import Random
 import Time
 import TypedSvg exposing (circle, g, line, rect, svg, text_, title)
@@ -149,7 +149,7 @@ init _ =
       , gameClock = 0
       , gameState = Ready
       , randomNumberList = []
-      , displayMode = DisplayGrid
+      , displayMode = DisplayGraph
       , grid = Grid.cellGridFromGraph gridWidth graph -- Grid.empty gridWidth gridWidth
       }
     , Cmd.none
@@ -263,6 +263,7 @@ update msg model =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
+                            |> Network.changeAccountBalance index 10
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter
                             |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
@@ -457,6 +458,7 @@ update msg model =
 
                             newGraph =
                                 Network.setStatus index Recruited model.graph
+                                    |> Network.changeAccountBalance index 10
                                     |> Network.connect model.recruiter index
                                     |> Network.incrementRecruitedCount model.recruiter
                                     |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
@@ -564,7 +566,7 @@ nodeElement model node =
             , fontSize (Px 12)
             , stroke (Color.rgba 1 1 1 1)
             ]
-            [ Svg.text node.label.value.name ]
+            [ Svg.text (String.fromInt node.label.value.accountBalance) ]
         ]
 
 
@@ -621,7 +623,7 @@ infoPanel : Model -> Element Msg
 infoPanel model =
     column [ spacing 12, width (px 450), padding 40, Border.width 1 ]
         [ el [ alignTop ] (text "SIMULATION")
-        , el [ Font.size 14 ] (text "Click on nodes to 'recruit' them.")
+        , el [ Font.size 14 ] (text "Press 'Ready', then click on nodes to 'recruit' them.")
         , row [ spacing 18 ] [ displayGraphButton model, displayGridButton model ]
         , row [ Font.size 12 ] [ el [] (text model.message) ]
         ]
@@ -637,6 +639,10 @@ controlPanel model =
             , recruitedDisplay model
 
             -- , el [] (text <| )
+            ]
+        , row [ spacing 18 ]
+            [ moneySupplyDisplay model
+            , numberOfTradersDisplay model
             ]
 
         -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
@@ -665,6 +671,28 @@ recruitedDisplay model =
             Grid.recruitedCount model.grid - 1 |> String.fromInt
     in
     el [] (text <| "Recruited: " ++ n)
+
+
+moneySupplyDisplay : Model -> Element Msg
+moneySupplyDisplay model =
+    let
+        moneySupply =
+            Network.moneySupply model.graph
+    in
+    el [] (text <| "Money supply = " ++ String.fromInt (Network.moneySupply model.graph))
+
+
+numberOfTradersDisplay : Model -> Element Msg
+numberOfTradersDisplay model =
+    let
+        nodeFilter : Entity -> Bool
+        nodeFilter entity =
+            (Network.nodeState entity).accountBalance > 0
+
+        n =
+            List.length <| Network.filterNodes nodeFilter model.graph
+    in
+    el [] (text <| "Trading population = " ++ String.fromInt n)
 
 
 influenceesDisplay2 : Model -> Element Msg

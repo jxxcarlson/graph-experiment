@@ -2,10 +2,12 @@ module Network exposing
     ( Entity
     , NodeState
     , Status(..)
+    , changeAccountBalance
     , computeForces
     , connect
     , connectNodeToNodeInList
     , defaultNodeState
+    , filterNodes
     , hiddenTestGraph
     , inComingNodeIds
     , incrementRecruitedCount
@@ -14,8 +16,10 @@ module Network exposing
     , influencers
     , initializeNode
     , integerSequence
+    , moneySupply
     , nodeComplementOfGraph
     , nodeState
+    , nodeState2
     , outGoingNodeIds
     , randomListElement
     , randomPairs
@@ -237,6 +241,28 @@ setStatus nodeIndex status graph =
                         { name = n.value.name
                         , status = status
                         , accountBalance = n.value.accountBalance
+                        , parentGraphId = n.value.parentGraphId
+                        , numberRecruited = n.value.numberRecruited
+                        , location = n.value.location
+                        }
+                }
+
+            else
+                n
+        )
+        graph
+
+
+changeAccountBalance : Int -> Int -> Graph Entity () -> Graph Entity ()
+changeAccountBalance nodeIndex delta graph =
+    Graph.mapNodes
+        (\n ->
+            if n.id == nodeIndex then
+                { n
+                    | value =
+                        { name = n.value.name
+                        , status = n.value.status
+                        , accountBalance = n.value.accountBalance + delta
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
@@ -505,6 +531,7 @@ recruitRandom numbers designatedRecruiter graph =
         ( Just recruiterNodeId, Just recruiteeNodeId ) ->
             connect recruiterNodeId recruiteeNodeId graph
                 |> setStatus recruiteeNodeId Recruited
+                |> changeAccountBalance recruiteeNodeId 10
                 |> incrementRecruitedCount recruiterNodeId
 
         _ ->
@@ -550,3 +577,15 @@ alterLink ( from, to ) =
     , distance = 90
     , strength = Just 1
     }
+
+
+moneySupply : Graph Entity () -> Int
+moneySupply graph =
+    graph
+        |> Graph.nodes
+        |> List.map (nodeState2 >> .accountBalance)
+        |> List.sum
+
+
+
+--|> List.map (.node >> .label >> .accountBalance)
