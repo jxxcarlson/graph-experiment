@@ -22,7 +22,7 @@ import IntDict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import List.Extra
-import Network exposing (Entity, NodeState, Status(..), moneySupply)
+import Network exposing (Entity, NodeState, Status(..), creditNode, moneySupply)
 import Random
 import SimpleGraph
 import Time
@@ -107,6 +107,7 @@ type alias Model =
     , clickCount : Int
     , graph : Graph Entity ()
     , hiddenGraph : Graph Entity ()
+    , numberOfTransactionsToDate : Int
     , graphBehavior : GraphBehavior
     , simulation : Force.State NodeId
     , message : String
@@ -152,6 +153,7 @@ init _ =
       , recruiter = 12
       , clickCount = 0
       , hiddenGraph = hiddenGraph
+      , numberOfTransactionsToDate = 0
       , graphBehavior = Selectable
       , simulation = Force.simulation forces
       , message = "No message yet"
@@ -272,6 +274,7 @@ update msg model =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
+                            |> Network.creditNode model.recruiter 1
                             |> Network.changeAccountBalance index 10
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter
@@ -288,6 +291,7 @@ update msg model =
                     , grid = newGrid
                     , simulation = Force.simulation forces
                     , clickCount = model.clickCount + 1
+                    , message = "Recruit node " ++ String.fromInt index
                 }
                     |> putCmd (sendAudioMessage audioMsg)
 
@@ -364,7 +368,7 @@ update msg model =
                 recruitCount1 =
                     Grid.recruitedCount model.grid
 
-                newGraph_ =
+                ( deltaRecuiterAccount, newGraph1 ) =
                     -- New recruitees recruit other nodes at random
                     case
                         model.gameState
@@ -373,26 +377,26 @@ update msg model =
                             == recruitStep
                     of
                         False ->
-                            model.graph
+                            ( 0, model.graph )
 
                         True ->
-                            Network.recruitRandom numbers model.recruiter model.graph
+                            ( 1, Network.recruitRandom numbers model.recruiter model.graph )
 
                 ( transactionRecord, newGraph ) =
                     case modBy recruitInterval model.gameClock == transactionStep of
                         False ->
-                            ( Nothing, newGraph_ )
+                            ( Nothing, newGraph1 )
 
                         True ->
-                            Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph_
+                            Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph1
 
-                message =
+                ( message, deltaTransactions ) =
                     case transactionRecord of
                         Nothing ->
-                            model.message
+                            ( model.message, 0 )
 
                         Just ( i, j ) ->
-                            "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j
+                            ( "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j, 1 )
 
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph
@@ -432,6 +436,7 @@ update msg model =
                 , grid = newGrid
                 , gameState = newGameState
                 , message = message
+                , numberOfTransactionsToDate = model.numberOfTransactionsToDate + deltaTransactions
               }
             , sendAudioMessage audioMsg
             )
@@ -676,6 +681,7 @@ controlPanel model =
             , resetButton model
             ]
         , accountDisplay model
+        , row [] [ el [] (text <| "Number of transactions: " ++ String.fromInt model.numberOfTransactionsToDate) ]
         , row [ Font.size 12 ] [ el [] (text model.message) ]
         ]
 

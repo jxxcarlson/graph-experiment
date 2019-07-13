@@ -7,6 +7,8 @@ module Network exposing
     , computeForces
     , connect
     , connectNodeToNodeInList
+    , creditNode
+    , debitNode
     , defaultNodeState
     , filterNodes
     , hiddenTestGraph
