@@ -2,6 +2,7 @@ module Network exposing
     ( Entity
     , NodeState
     , Status(..)
+    , accountList
     , changeAccountBalance
     , computeForces
     , connect
@@ -23,6 +24,7 @@ module Network exposing
     , outGoingNodeIds
     , randomListElement
     , randomPairs
+    , randomTransaction
     , recruitNodes
     , recruitRandom
     , recruitRandomFreeNode
@@ -80,6 +82,79 @@ filterNodes filterNode_ graph =
     in
     Graph.nodes graph
         |> List.filter filterNode
+
+
+accountList : Graph Entity () -> List ( NodeId, Int )
+accountList graph =
+    graph
+        |> Graph.nodes
+        |> List.map (\n -> ( n.id, n.label.value.accountBalance ))
+
+
+activeTraders : Graph Entity () -> List (Node Entity)
+activeTraders graph =
+    let
+        nodeFilter : Entity -> Bool
+        nodeFilter entity =
+            (nodeState entity).accountBalance > 0
+    in
+    filterNodes nodeFilter graph
+
+
+debitNode : NodeId -> Int -> Graph Entity () -> Graph Entity ()
+debitNode nodeId amount graph =
+    Graph.mapNodes
+        (\n ->
+            if n.id == nodeId then
+                { n
+                    | value =
+                        { name = n.value.name
+                        , status = n.value.status
+                        , accountBalance = n.value.accountBalance - amount
+                        , parentGraphId = n.value.parentGraphId
+                        , numberRecruited = n.value.numberRecruited
+                        , location = n.value.location
+                        }
+                }
+
+            else
+                n
+        )
+        graph
+
+
+creditNode : NodeId -> Int -> Graph Entity () -> Graph Entity ()
+creditNode nodeId amount graph =
+    debitNode nodeId -amount graph
+
+
+randomTransaction : Maybe Float -> Maybe Float -> Int -> Graph Entity () -> ( Maybe ( NodeId, NodeId ), Graph Entity () )
+randomTransaction mr1 mr2 amount graph =
+    let
+        traders =
+            activeTraders graph
+                |> List.map .id
+
+        maybeNodeId1 : Maybe NodeId
+        maybeNodeId1 =
+            randomListElement mr1 traders
+
+        maybeNodeId2 =
+            randomListElement mr2 traders
+    in
+    if maybeNodeId1 == maybeNodeId2 then
+        ( Nothing, graph )
+
+    else
+        case ( maybeNodeId1, maybeNodeId2 ) of
+            ( Just nodeId1, Just nodeId2 ) ->
+                graph
+                    |> creditNode nodeId2 amount
+                    |> debitNode nodeId1 amount
+                    |> (\g -> ( Just ( nodeId1, nodeId2 ), g ))
+
+            _ ->
+                ( Nothing, graph )
 
 
 type Status

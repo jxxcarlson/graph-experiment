@@ -24,6 +24,7 @@ import Json.Encode as Encode
 import List.Extra
 import Network exposing (Entity, NodeState, Status(..), moneySupply)
 import Random
+import SimpleGraph
 import Time
 import TypedSvg exposing (circle, g, line, rect, svg, text_, title)
 import TypedSvg.Attributes exposing (class, fill, fontSize, stroke, transform, viewBox)
@@ -41,7 +42,15 @@ recruitInterval =
 
 
 recruitStep =
-    recruitInterval // 2
+    0
+
+
+
+-- recruitInterval // 2
+
+
+transactionStep =
+    1
 
 
 gridWidth =
@@ -81,15 +90,15 @@ type Msg
     | CellGrid CellGrid.Msg
 
 
+type GraphBehavior
+    = Selectable
+    | Draggable
+
+
 
 --
 -- MODEL
 --
-
-
-type GraphBehavior
-    = Selectable
-    | Draggable
 
 
 type alias Model =
@@ -355,7 +364,7 @@ update msg model =
                 recruitCount1 =
                     Grid.recruitedCount model.grid
 
-                newGraph =
+                newGraph_ =
                     -- New recruitees recruit other nodes at random
                     case
                         model.gameState
@@ -368,6 +377,22 @@ update msg model =
 
                         True ->
                             Network.recruitRandom numbers model.recruiter model.graph
+
+                ( transactionRecord, newGraph ) =
+                    case modBy recruitInterval model.gameClock == transactionStep of
+                        False ->
+                            ( Nothing, newGraph_ )
+
+                        True ->
+                            Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph_
+
+                message =
+                    case transactionRecord of
+                        Nothing ->
+                            model.message
+
+                        Just ( i, j ) ->
+                            "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j
 
                 newGrid =
                     Grid.cellGridFromGraph gridWidth newGraph
@@ -406,6 +431,7 @@ update msg model =
                 , graph = newGraph
                 , grid = newGrid
                 , gameState = newGameState
+                , message = message
               }
             , sendAudioMessage audioMsg
             )
@@ -467,7 +493,7 @@ update msg model =
                                 Grid.cellGridFromGraph gridWidth newGraph
 
                             message =
-                                ""
+                                "cellGrid: mouse click"
                         in
                         ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
 
@@ -549,10 +575,14 @@ nodeElement model node =
 
                 Draggable ->
                     onMouseDown
+
+        accBal : Float
+        accBal =
+            node.label.value.accountBalance |> toFloat
     in
     g []
         [ circle
-            [ r 14.0
+            [ r <| 12.0 + (accBal / 2.5)
             , nodeColorizer node
             , stroke (Color.rgba 0 0 0 0)
             , strokeWidth 7
@@ -581,7 +611,7 @@ nodeColorizer node =
                     fill (Fill (Color.rgb255 244 65 238))
 
                 0 ->
-                    fill (Fill (Color.rgb255 66 244 137))
+                    fill (Fill (Color.rgb255 0 180 0))
 
                 1 ->
                     fill (Fill (Color.rgb255 244 128 65))
@@ -625,7 +655,6 @@ infoPanel model =
         [ el [ alignTop ] (text "SIMULATION")
         , el [ Font.size 14 ] (text "Press 'Ready', then click on nodes to 'recruit' them.")
         , row [ spacing 18 ] [ displayGraphButton model, displayGridButton model ]
-        , row [ Font.size 12 ] [ el [] (text model.message) ]
         ]
 
 
@@ -640,17 +669,43 @@ controlPanel model =
 
             -- , el [] (text <| )
             ]
-        , row [ spacing 18 ]
-            [ moneySupplyDisplay model
-            , numberOfTradersDisplay model
-            ]
 
         -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
         , row [ spacing 18 ]
             [ startOverButton model
             , resetButton model
             ]
+        , accountDisplay model
+        , row [ Font.size 12 ] [ el [] (text model.message) ]
         ]
+
+
+accountDisplay : Model -> Element Msg
+accountDisplay model =
+    column [ paddingXY 0 12 ]
+        [ row [ moveLeft 48 ] [ accountChart model.graph ]
+        , row [ spacing 18 ]
+            [ moneySupplyDisplay model
+            , numberOfTradersDisplay model
+            ]
+        ]
+
+
+accountChart : Graph Entity () -> Element Msg
+accountChart graph =
+    let
+        data =
+            Network.accountList graph
+                |> List.map (Tuple.second >> toFloat)
+    in
+    SimpleGraph.barChart barGraphAttributes data |> Element.html
+
+
+barGraphAttributes =
+    { graphHeight = 70
+    , graphWidth = 300
+    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 15, SimpleGraph.YTickmarks 6, SimpleGraph.XTickmarks 2 ]
+    }
 
 
 influenceesDisplay : Model -> Element Msg

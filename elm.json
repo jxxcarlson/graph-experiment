@@ -18,7 +18,8 @@
             "elm-community/list-extra": "8.2.0",
             "elm-community/maybe-extra": "5.0.0",
             "elm-community/typed-svg": "5.0.1",
-            "gampleman/elm-visualization": "2.0.0",
+            "gampleman/elm-visualization": "2.0.1",
+            "jxxcarlson/elm-graph": "3.0.0",
             "jxxcarlson/elm-pseudorandom": "1.0.3",
             "mdgriffith/elm-ui": "1.1.0",
             "mpizenberg/elm-pointer-events": "4.0.1"
@@ -32,7 +33,7 @@
             "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.2",
             "folkertdev/elm-deque": "3.0.1",
-            "folkertdev/one-true-path-experiment": "4.0.2",
+            "folkertdev/one-true-path-experiment": "4.0.3",
             "folkertdev/svg-path-lowlevel": "3.0.0",
             "ianmackenzie/elm-float-extra": "1.0.1",
             "ianmackenzie/elm-geometry": "1.2.1",
