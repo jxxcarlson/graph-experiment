@@ -22,7 +22,7 @@ import IntDict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import List.Extra
-import Network exposing (Entity, NodeState, Status(..), creditNode, moneySupply)
+import Network exposing (EdgeLabel, Entity, NodeState, Status(..), creditNode, moneySupply)
 import Random
 import SimpleGraph
 import Time
@@ -105,8 +105,8 @@ type alias Model =
     { drag : Maybe Drag
     , recruiter : NodeId
     , clickCount : Int
-    , graph : Graph Entity ()
-    , hiddenGraph : Graph Entity ()
+    , graph : Graph Entity EdgeLabel
+    , hiddenGraph : Graph Entity EdgeLabel
     , numberOfTransactionsToDate : Int
     , graphBehavior : GraphBehavior
     , simulation : Force.State NodeId
@@ -202,7 +202,7 @@ sendAudioMessage audioMsg =
     sendMessage <| encodeAudioMessage audioMsg
 
 
-updateNode : ( Float, Float ) -> NodeContext Entity () -> NodeContext Entity ()
+updateNode : ( Float, Float ) -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
 updateNode ( x, y ) nodeCtx =
     let
         nodeValue =
@@ -211,7 +211,7 @@ updateNode ( x, y ) nodeCtx =
     Network.updateContextWithValue nodeCtx { nodeValue | x = x, y = y }
 
 
-updateGraphWithList : Graph Entity () -> List Entity -> Graph Entity ()
+updateGraphWithList : Graph Entity EdgeLabel -> List Entity -> Graph Entity EdgeLabel
 updateGraphWithList =
     let
         graphUpdater value =
@@ -697,7 +697,7 @@ accountDisplay model =
         ]
 
 
-accountChart : Graph Entity () -> Element Msg
+accountChart : Graph Entity EdgeLabel -> Element Msg
 accountChart graph =
     let
         data =

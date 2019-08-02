@@ -1,9 +1,10 @@
-module Grid exposing (Cell, CellStatus(..), empty, recruitedCount, cellGridFromGraph)
+module Grid exposing (Cell, CellStatus(..), cellGridFromGraph, empty, recruitedCount)
 
-import Network
-import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
-import CellGrid exposing (CellGrid(..))
 import Array
+import CellGrid exposing (CellGrid(..))
+import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
+import Network exposing (EdgeLabel)
+
 
 
 -- type alias NodeState = { name: String, status: Status, location: (Int, Int) }
@@ -29,12 +30,12 @@ cellFromEntity entity =
         nodeState_ =
             Network.nodeState entity
     in
-        case nodeState_.status of
-            Network.Recruited ->
-                { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = Recruited }
+    case nodeState_.status of
+        Network.Recruited ->
+            { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = Recruited }
 
-            Network.NotRecruited ->
-                { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = NotRecruited }
+        Network.NotRecruited ->
+            { id = entity.id, parentGraphId = entity.value.parentGraphId, name = nodeState_.name, status = NotRecruited }
 
 
 empty : Int -> Int -> CellGrid Cell
@@ -49,6 +50,7 @@ recruitedCount (CellGrid _ cellArray) =
         (\cell acc ->
             if cell.status == Recruited then
                 acc + 1
+
             else
                 acc
         )
@@ -56,13 +58,13 @@ recruitedCount (CellGrid _ cellArray) =
         cellArray
 
 
-cellGridFromGraph : Int -> Graph Network.Entity () -> CellGrid Cell
+cellGridFromGraph : Int -> Graph Network.Entity EdgeLabel -> CellGrid Cell
 cellGridFromGraph gridWidth graph =
     let
         emptyCellGrid =
             empty gridWidth gridWidth
     in
-        List.foldl insertNode emptyCellGrid (Graph.nodes graph)
+    List.foldl insertNode emptyCellGrid (Graph.nodes graph)
 
 
 insertNode : Graph.Node Network.Entity -> CellGrid Cell -> CellGrid Cell
@@ -72,4 +74,4 @@ insertNode nodeEntity grid =
         nodeState_ =
             Network.nodeState nodeEntity.label
     in
-        CellGrid.setValue grid nodeState_.location (cellFromEntity nodeEntity.label)
+    CellGrid.setValue grid nodeState_.location (cellFromEntity nodeEntity.label)

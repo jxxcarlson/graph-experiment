@@ -1,5 +1,6 @@
 module Network exposing
-    ( Entity
+    ( EdgeLabel
+    , Entity
     , NodeState
     , Status(..)
     , accountList
@@ -49,6 +50,25 @@ import PseudoRandom
 --
 
 
+type alias Entity =
+    Force.Entity NodeId { value : NodeState }
+
+
+type alias EdgeLabel =
+    { unitsSent : Int
+    , unitsReceived : Int
+    }
+
+
+zeroEdgeLabel =
+    { unitsSent = 0, unitsReceived = 0 }
+
+
+type Status
+    = Recruited
+    | NotRecruited
+
+
 type alias GraphId =
     Int
 
@@ -63,7 +83,7 @@ type alias NodeState =
     }
 
 
-filterNodesOnState : (NodeState -> Bool) -> Graph Entity () -> List (Node Entity)
+filterNodesOnState : (NodeState -> Bool) -> Graph Entity EdgeLabel -> List (Node Entity)
 filterNodesOnState filterNodeState graph =
     let
         filterNode : Node Entity -> Bool
@@ -74,7 +94,7 @@ filterNodesOnState filterNodeState graph =
         |> List.filter filterNode
 
 
-filterNodes : (Entity -> Bool) -> Graph Entity () -> List (Node Entity)
+filterNodes : (Entity -> Bool) -> Graph Entity EdgeLabel -> List (Node Entity)
 filterNodes filterNode_ graph =
     let
         filterNode : Node Entity -> Bool
@@ -91,14 +111,14 @@ filterNodes filterNode_ graph =
 --
 
 
-accountList : Graph Entity () -> List ( NodeId, Int )
+accountList : Graph Entity EdgeLabel -> List ( NodeId, Int )
 accountList graph =
     graph
         |> Graph.nodes
         |> List.map (\n -> ( n.id, n.label.value.accountBalance ))
 
 
-activeTraders : Graph Entity () -> List (Node Entity)
+activeTraders : Graph Entity EdgeLabel -> List (Node Entity)
 activeTraders graph =
     let
         nodeFilter : Entity -> Bool
@@ -108,7 +128,7 @@ activeTraders graph =
     filterNodes nodeFilter graph
 
 
-debitNode : NodeId -> Int -> Graph Entity () -> Graph Entity ()
+debitNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 debitNode nodeId amount graph =
     Graph.mapNodes
         (\n ->
@@ -130,12 +150,12 @@ debitNode nodeId amount graph =
         graph
 
 
-creditNode : NodeId -> Int -> Graph Entity () -> Graph Entity ()
+creditNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 creditNode nodeId amount graph =
     debitNode nodeId -amount graph
 
 
-randomTransaction : Maybe Float -> Maybe Float -> Int -> Graph Entity () -> ( Maybe ( NodeId, NodeId ), Graph Entity () )
+randomTransaction : Maybe Float -> Maybe Float -> Int -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
 randomTransaction mr1 mr2 amount graph =
     let
         traders =
@@ -164,15 +184,6 @@ randomTransaction mr1 mr2 amount graph =
                 ( Nothing, graph )
 
 
-type Status
-    = Recruited
-    | NotRecruited
-
-
-type alias Entity =
-    Force.Entity NodeId { value : NodeState }
-
-
 nodeState2 : Node Entity -> NodeState
 nodeState2 node =
     node.label.value
@@ -189,7 +200,7 @@ nodeState entity =
 --
 
 
-distributeLocations : Graph Entity () -> Graph Entity ()
+distributeLocations : Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 distributeLocations graph =
     Graph.mapNodes (\node -> node) graph
 
@@ -217,40 +228,55 @@ recruitedNodeState graphId name ( i, j ) =
     { name = name, accountBalance = 0, parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
 
 
+makeEdge : ( NodeId, NodeId ) -> Edge EdgeLabel
+makeEdge ( from, to ) =
+    { from = from, to = to, label = zeroEdgeLabel }
+
+
 hiddenTestGraph =
-    Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState 0 "p0" ( 10, 18 )
-        , unrecruitedNodeState 0 "p1" ( 16, 15 )
-        , unrecruitedNodeState 0 "p2" ( 13, 17 )
-        , unrecruitedNodeState 0 "p3" ( 3, 12 )
-        , unrecruitedNodeState 0 "p4" ( 19, 19 )
-        , unrecruitedNodeState 0 "p5" ( 2, 1 )
-        , unrecruitedNodeState 1 "q0" ( 9, 3 )
-        , unrecruitedNodeState 1 "q1" ( 7, 13 )
-        , unrecruitedNodeState 1 "q2" ( 11, 11 )
-        , unrecruitedNodeState 1 "q3" ( 4, 6 )
-        , unrecruitedNodeState 1 "q4" ( 18, 2 )
-        , unrecruitedNodeState 1 "q5" ( 17, 8 )
-        , recruitedNodeState 100 "r" ( 8, 10 )
+    Graph.fromNodesAndEdges
+        [ Node 0 (unrecruitedNodeState 0 "p0" ( 10, 18 ))
+        , Node 1 (unrecruitedNodeState 0 "p1" ( 16, 15 ))
+        , Node 2 (unrecruitedNodeState 0 "p2" ( 13, 17 ))
+        , Node 3 (unrecruitedNodeState 0 "p3" ( 3, 12 ))
+        , Node 4 (unrecruitedNodeState 0 "p4" ( 19, 19 ))
+        , Node 5 (unrecruitedNodeState 0 "p5" ( 2, 1 ))
+        , Node 6 (unrecruitedNodeState 1 "q0" ( 9, 3 ))
+        , Node 7 (unrecruitedNodeState 1 "q1" ( 7, 13 ))
+        , Node 8 (unrecruitedNodeState 1 "q2" ( 11, 11 ))
+        , Node 9 (unrecruitedNodeState 1 "q3" ( 4, 6 ))
+        , Node 10 (unrecruitedNodeState 1 "q4" ( 18, 2 ))
+        , Node 11 (unrecruitedNodeState 1 "q5" ( 17, 8 ))
+        , Node 12 (recruitedNodeState 100 "r" ( 8, 10 ))
         ]
-        [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
+        [ makeEdge ( 0, 1 )
+        , makeEdge ( 0, 2 )
+        , makeEdge ( 0, 3 )
+        , makeEdge ( 0, 4 )
+        , makeEdge ( 0, 5 )
+        , makeEdge ( 6, 7 )
+        , makeEdge ( 6, 8 )
+        , makeEdge ( 6, 9 )
+        , makeEdge ( 6, 10 )
+        , makeEdge ( 6, 11 )
+        ]
 
 
 testGraph =
-    Graph.fromNodeLabelsAndEdgePairs
-        [ unrecruitedNodeState 0 "p0" ( 10, 18 )
-        , unrecruitedNodeState 0 "p1" ( 16, 15 )
-        , unrecruitedNodeState 0 "p2" ( 13, 17 )
-        , unrecruitedNodeState 0 "p3" ( 3, 12 )
-        , unrecruitedNodeState 0 "p4" ( 19, 19 )
-        , unrecruitedNodeState 0 "p5" ( 2, 1 )
-        , unrecruitedNodeState 1 "q0" ( 9, 3 )
-        , unrecruitedNodeState 1 "q1" ( 7, 13 )
-        , unrecruitedNodeState 1 "q2" ( 11, 11 )
-        , unrecruitedNodeState 1 "q3" ( 4, 6 )
-        , unrecruitedNodeState 1 "q4" ( 18, 2 )
-        , unrecruitedNodeState 1 "q5" ( 17, 8 )
-        , recruitedNodeState 100 "r" ( 8, 10 )
+    Graph.fromNodesAndEdges
+        [ Node 0 (unrecruitedNodeState 0 "p0" ( 10, 18 ))
+        , Node 1 (unrecruitedNodeState 0 "p1" ( 16, 15 ))
+        , Node 2 (unrecruitedNodeState 0 "p2" ( 13, 17 ))
+        , Node 3 (unrecruitedNodeState 0 "p3" ( 3, 12 ))
+        , Node 4 (unrecruitedNodeState 0 "p4" ( 19, 19 ))
+        , Node 5 (unrecruitedNodeState 0 "p5" ( 2, 1 ))
+        , Node 6 (unrecruitedNodeState 1 "q0" ( 9, 3 ))
+        , Node 7 (unrecruitedNodeState 1 "q1" ( 7, 13 ))
+        , Node 8 (unrecruitedNodeState 1 "q2" ( 11, 11 ))
+        , Node 9 (unrecruitedNodeState 1 "q3" ( 4, 6 ))
+        , Node 10 (unrecruitedNodeState 1 "q4" ( 18, 2 ))
+        , Node 11 (unrecruitedNodeState 1 "q5" ( 17, 8 ))
+        , Node 12 (recruitedNodeState 100 "r" ( 8, 10 ))
         ]
         []
 
@@ -259,7 +285,7 @@ defaultNodeState =
     { name = "", status = NotRecruited, accountBalance = 0, parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
 
-initializeNode : NodeContext NodeState () -> NodeContext Entity ()
+initializeNode : NodeContext NodeState EdgeLabel -> NodeContext Entity EdgeLabel
 initializeNode ctx =
     { node = { label = Force.entity ctx.node.id ctx.node.label, id = ctx.node.id }
     , incoming = ctx.incoming
@@ -268,8 +294,8 @@ initializeNode ctx =
 
 
 setupGraph :
-    Graph.Graph NodeState ()
-    -> ( List (Force.Force Int), Graph.Graph Entity () )
+    Graph.Graph NodeState EdgeLabel
+    -> ( List (Force.Force Int), Graph.Graph Entity EdgeLabel )
 setupGraph inputGraph =
     let
         outputGraph =
@@ -288,8 +314,8 @@ setupGraph inputGraph =
 
 
 reheatGraph :
-    Graph.Graph NodeState ()
-    -> ( List (Force.Force Int), Graph.Graph Entity () )
+    Graph.Graph NodeState EdgeLabel
+    -> ( List (Force.Force Int), Graph.Graph Entity EdgeLabel )
 reheatGraph inputGraph =
     let
         outputGraph =
@@ -313,7 +339,7 @@ reheatGraph inputGraph =
 --
 
 
-setStatus : Int -> Status -> Graph Entity () -> Graph Entity ()
+setStatus : Int -> Status -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 setStatus nodeIndex status graph =
     Graph.mapNodes
         (\n ->
@@ -335,7 +361,7 @@ setStatus nodeIndex status graph =
         graph
 
 
-changeAccountBalance : Int -> Int -> Graph Entity () -> Graph Entity ()
+changeAccountBalance : Int -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 changeAccountBalance nodeIndex delta graph =
     Graph.mapNodes
         (\n ->
@@ -357,7 +383,7 @@ changeAccountBalance nodeIndex delta graph =
         graph
 
 
-updateContextWithValue : NodeContext Entity () -> Entity -> NodeContext Entity ()
+updateContextWithValue : NodeContext Entity EdgeLabel -> Entity -> NodeContext Entity EdgeLabel
 updateContextWithValue nodeCtx value =
     let
         node =
@@ -372,7 +398,7 @@ updateContextWithValue nodeCtx value =
 --
 
 
-connect : NodeId -> NodeId -> Graph n () -> Graph n ()
+connect : NodeId -> NodeId -> Graph n EdgeLabel -> Graph n EdgeLabel
 connect from to graph =
     case newContext from to graph of
         Nothing ->
@@ -382,7 +408,7 @@ connect from to graph =
             Graph.insert ctx graph
 
 
-incrementRecruitedCount : NodeId -> Graph Entity () -> Graph Entity ()
+incrementRecruitedCount : NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 incrementRecruitedCount nodeId graph =
     Graph.mapNodes
         (\n ->
@@ -404,19 +430,19 @@ incrementRecruitedCount nodeId graph =
         graph
 
 
-connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity () -> Graph Entity ()
+connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 connectNodeToNodeInList from nodeList graph =
     List.foldl (\to graph_ -> connect from to graph_ |> setStatus to Recruited) graph nodeList
 
 
-newContext : NodeId -> NodeId -> Graph n () -> Maybe (NodeContext n ())
+newContext : NodeId -> NodeId -> Graph n EdgeLabel -> Maybe (NodeContext n EdgeLabel)
 newContext from to graph =
-    Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing }) (Graph.get from graph)
+    Maybe.map (\x -> { x | outgoing = IntDict.insert to zeroEdgeLabel x.outgoing }) (Graph.get from graph)
 
 
-newContext2 : NodeId -> NodeId -> Graph n () -> Maybe (NodeContext n ())
+newContext2 : NodeId -> NodeId -> Graph n EdgeLabel -> Maybe (NodeContext n EdgeLabel)
 newContext2 from to graph =
-    Maybe.map (\x -> { x | outgoing = IntDict.insert to () x.outgoing }) (Graph.get from graph)
+    Maybe.map (\x -> { x | outgoing = IntDict.insert to zeroEdgeLabel x.outgoing }) (Graph.get from graph)
 
 
 
@@ -525,7 +551,7 @@ filterNotGraph graph filter =
 --
 
 
-recruitNodes : List Float -> NodeId -> Graph Entity () -> Graph Entity () -> Graph Entity ()
+recruitNodes : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
     let
         -- random influencee of recruiterNode
@@ -554,7 +580,7 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
 
 {-| The recruiter recruits a free node at random
 -}
-recruitRandomFreeNode : List Float -> NodeId -> Graph Entity () -> Graph Entity ()
+recruitRandomFreeNode : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 recruitRandomFreeNode numbers recruiter graph =
     let
         freeNodes : List NodeId
@@ -582,7 +608,7 @@ recruitRandomFreeNode numbers recruiter graph =
 {-| A random influencee whose recruitedCount is 0 or 1
 recruits a free node at random.
 -}
-recruitRandom : List Float -> NodeId -> Graph Entity () -> Graph Entity ()
+recruitRandom : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 recruitRandom numbers designatedRecruiter graph =
     let
         rn2 =
@@ -667,7 +693,7 @@ alterLink ( from, to ) =
     }
 
 
-moneySupply : Graph Entity () -> Int
+moneySupply : Graph Entity EdgeLabel -> Int
 moneySupply graph =
     graph
         |> Graph.nodes
