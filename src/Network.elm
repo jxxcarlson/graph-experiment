@@ -20,7 +20,6 @@ module Network exposing
     , initializeNode
     , integerSequence
     , moneySupply
-    , nodeComplementOfGraph
     , nodeState
     , nodeState2
     , outGoingNodeIds
@@ -84,6 +83,12 @@ filterNodes filterNode_ graph =
     in
     Graph.nodes graph
         |> List.filter filterNode
+
+
+
+--
+-- TRANSACTIONS
+--
 
 
 accountList : Graph Entity () -> List ( NodeId, Int )
@@ -512,6 +517,12 @@ filterNotGraph : Graph n e -> (Node n -> Bool) -> List (Node n)
 filterNotGraph graph filter =
     Graph.nodes graph
         |> List.Extra.filterNot filter
+
+
+
+--
+-- RECRUITMENT
+--
 
 
 recruitNodes : List Float -> NodeId -> Graph Entity () -> Graph Entity () -> Graph Entity ()
