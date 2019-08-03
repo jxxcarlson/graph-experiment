@@ -643,10 +643,31 @@ mainColumn model =
             [ leftPanel model
             , rightPanel model
             ]
+        , el [ Font.size 14 ] (displayEdges model.graph)
         ]
 
 
-leftPanel : Model -> Element Msg
+displayEdges : Graph Entity EdgeLabel -> Element Msg
+displayEdges g =
+    paragraph [ Font.size 14, spacing 8 ] [ text <| stringForGraphEdges g ]
+
+
+stringForGraphEdges : Graph Entity EdgeLabel -> String
+stringForGraphEdges g =
+    g |> Graph.edges |> List.map stringFromEdge |> String.join " ......... "
+
+
+stringFromEdge : Edge EdgeLabel -> String
+stringFromEdge edge =
+    String.fromInt edge.from
+        ++ " -> "
+        ++ String.fromInt edge.to
+        ++ ": s "
+        ++ String.fromInt edge.label.unitsSent
+        ++ ", r "
+        ++ String.fromInt edge.label.unitsReceived
+
+
 leftPanel model =
     column [ spacing 12, width (px 500), padding 40 ]
         [ infoPanel model

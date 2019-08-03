@@ -5,6 +5,8 @@ module Network exposing
     , Status(..)
     , accountList
     , changeAccountBalance
+    , changeEdgeLabel
+    , changeEdgeLabel1
     , computeForces
     , connect
     , connectNodeToNodeInList
@@ -12,6 +14,7 @@ module Network exposing
     , debitNode
     , defaultNodeState
     , filterNodes
+    , getEdgeLabel
     , hiddenTestGraph
     , inComingNodeIds
     , incrementRecruitedCount
@@ -24,6 +27,8 @@ module Network exposing
     , nodeState
     , nodeState2
     , outGoingNodeIds
+    , postTransactionToContext
+    , postTransactonToNetwork
     , randomListElement
     , randomPairs
     , randomTransaction
@@ -35,11 +40,12 @@ module Network exposing
     , setupGraph
     , testGraph
     , updateContextWithValue
+    , zeroEdgeLabel
     )
 
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
-import IntDict
+import IntDict exposing (IntDict)
 import List.Extra
 import PseudoRandom
 
@@ -58,6 +64,14 @@ type alias EdgeLabel =
     { unitsSent : Int
     , unitsReceived : Int
     }
+
+
+type alias Network =
+    Graph Entity EdgeLabel
+
+
+type alias NetworkEdge =
+    Edge EdgeLabel
 
 
 zeroEdgeLabel =
@@ -129,10 +143,10 @@ activeTraders graph =
 
 
 debitNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-debitNode nodeId amount graph =
+debitNode nodeId_ amount graph =
     Graph.mapNodes
         (\n ->
-            if n.id == nodeId then
+            if n.id == nodeId_ then
                 { n
                     | value =
                         { name = n.value.name
@@ -151,8 +165,8 @@ debitNode nodeId amount graph =
 
 
 creditNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-creditNode nodeId amount graph =
-    debitNode nodeId -amount graph
+creditNode nodeId_ amount graph =
+    debitNode nodeId_ -amount graph
 
 
 randomTransaction : Maybe Float -> Maybe Float -> Int -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
@@ -178,10 +192,171 @@ randomTransaction mr1 mr2 amount graph =
                 graph
                     |> creditNode nodeId2 amount
                     |> debitNode nodeId1 amount
+                    |> connect nodeId1 nodeId2
+                    |> postTransactonToNetwork nodeId1 nodeId2 amount
                     |> (\g -> ( Just ( nodeId1, nodeId2 ), g ))
 
             _ ->
                 ( Nothing, graph )
+
+
+printPostTransactionToContext : NodeId -> NodeId -> Int -> NodeContext Entity EdgeLabel -> String
+printPostTransactionToContext n1 n2 amount ctx =
+    if ctx.node.id /= n1 then
+        "No match for " ++ String.fromInt n1
+
+    else
+        case ( IntDict.get n2 <| .incoming ctx, IntDict.get n2 <| .outgoing ctx ) of
+            ( Just edgeLabel, Nothing ) ->
+                "incoming: " ++ stringOfEdgeLabel edgeLabel
+
+            ( Nothing, Just edgeLabel ) ->
+                "outging: " ++ stringOfEdgeLabel edgeLabel
+
+            _ ->
+                "No match for " ++ String.fromInt n1 ++ ", " ++ String.fromInt n2
+
+
+postTransactonToNetwork : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+postTransactonToNetwork n1 n2 amount g =
+    Graph.mapContexts (postTransactionToContext n1 n2 amount) g
+
+
+postTransactionToContext : NodeId -> NodeId -> Int -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
+postTransactionToContext n1 n2 amount ctx =
+    if ctx.node.id /= n1 then
+        ctx
+
+    else
+        case ( IntDict.get n2 <| .incoming ctx, IntDict.get n2 <| .outgoing ctx ) of
+            ( Just edgeLabel, Nothing ) ->
+                { ctx | incoming = postTransactionToIncoming n2 amount ctx.incoming }
+
+            ( Nothing, Just edgeLabel ) ->
+                { ctx | outgoing = postTransactionToOutGoing n2 amount ctx.outgoing }
+
+            _ ->
+                ctx
+
+
+postTransactionToIncoming : NodeId -> Int -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToIncoming nodeId amount intDict =
+    case IntDict.get nodeId intDict of
+        Nothing ->
+            intDict
+
+        Just edgeLabel ->
+            let
+                newEdgeLabel =
+                    { edgeLabel | unitsReceived = edgeLabel.unitsReceived + amount }
+            in
+            IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
+
+
+postTransactionToOutGoing : NodeId -> Int -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToOutGoing nodeId amount intDict =
+    case IntDict.get nodeId intDict of
+        Nothing ->
+            intDict
+
+        Just edgeLabel ->
+            let
+                newEdgeLabel =
+                    { edgeLabel | unitsSent = edgeLabel.unitsSent + amount }
+            in
+            IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
+
+
+stringOfEdgeLabel : EdgeLabel -> String
+stringOfEdgeLabel el =
+    "r: " ++ String.fromInt el.unitsReceived ++ ", s: " ++ String.fromInt el.unitsSent
+
+
+updateEdgeLabel : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+updateEdgeLabel n1 n2 amount g =
+    case getEdgeLabel n1 n2 g of
+        Nothing ->
+            g
+
+        Just edgeLabel ->
+            let
+                -- edgeToChange =
+                --     { from = n1, to = n2, label = edgeLabel }
+                newEdgeLabel =
+                    { unitsSent = edgeLabel.unitsSent + amount
+                    , unitsReceived = edgeLabel.unitsReceived - amount
+                    }
+
+                changedEdge =
+                    { from = n1, to = n2, label = newEdgeLabel }
+            in
+            -- Graph.mapEdges (changeEdgeLabel newEdgeLabel n1 n2) g
+            Graph.mapEdges identity g
+
+
+
+--
+
+
+changeEdgeLabel : EdgeLabel -> NodeId -> NodeId -> Edge EdgeLabel -> Edge EdgeLabel
+changeEdgeLabel edgeLabel n1_ n2_ e =
+    e
+
+
+changeEdgeLabel1 : EdgeLabel -> NodeId -> NodeId -> Edge EdgeLabel -> Edge EdgeLabel
+changeEdgeLabel1 edgeLabel n1_ n2_ e =
+    case e.from == n1_ && e.to == n2_ of
+        False ->
+            e
+
+        True ->
+            { e | label = edgeLabel }
+
+
+getEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
+getEdgeLabel n1 n2 g =
+    case Graph.get n1 g of
+        Nothing ->
+            Nothing
+
+        Just ctx ->
+            case ( IntDict.get n2 ctx.outgoing, IntDict.get n2 ctx.incoming ) of
+                ( Just edgeLabel, Nothing ) ->
+                    Just edgeLabel
+
+                ( Nothing, Just edgeLabel ) ->
+                    Just edgeLabel
+
+                _ ->
+                    Nothing
+
+
+getEdgeLabel2 : NodeId -> NodeId -> Graph NodeState EdgeLabel -> Result String ( Maybe EdgeLabel, Maybe EdgeLabel )
+getEdgeLabel2 n1 n2 g =
+    case Graph.get n1 g of
+        Nothing ->
+            Err "Error"
+
+        Just ctx ->
+            Ok ( IntDict.get n2 ctx.outgoing, IntDict.get n2 ctx.incoming )
+
+
+getEdgeLabel1 : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
+getEdgeLabel1 n1 n2 g =
+    case Graph.get n1 g of
+        Nothing ->
+            Nothing
+
+        Just ctx ->
+            case ( IntDict.get n2 ctx.outgoing, IntDict.get n2 ctx.incoming ) of
+                ( Just eLabel, _ ) ->
+                    Just eLabel
+
+                ( _, Just eLabel ) ->
+                    Just eLabel
+
+                _ ->
+                    Nothing
 
 
 nodeState2 : Node Entity -> NodeState
