@@ -1,4 +1,4 @@
-port module NetworkSimulator exposing (Msg(..), cellRenderer, main)
+port module NetworkSimulator exposing (Msg(..), cellRenderer, main, stringForGraphEdges)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
@@ -137,6 +137,10 @@ type alias Drag =
     , current : ( Float, Float )
     , index : NodeId
     }
+
+
+
+-- g1 = setupGraph testGraph |> Tuple.second
 
 
 init : () -> ( Model, Cmd Msg )
@@ -654,7 +658,12 @@ displayEdges g =
 
 stringForGraphEdges : Graph Entity EdgeLabel -> String
 stringForGraphEdges g =
-    g |> Graph.edges |> List.map stringFromEdge |> String.join " ......... "
+    g
+        |> Graph.edges
+        |> List.sortBy (\edge -> 1000 * edge.from + edge.to)
+        -- |> List.filter (\edge -> edge.label.unitsSent /= 0)
+        |> List.map stringFromEdge
+        |> String.join " ... "
 
 
 stringFromEdge : Edge EdgeLabel -> String
@@ -662,10 +671,11 @@ stringFromEdge edge =
     String.fromInt edge.from
         ++ " -> "
         ++ String.fromInt edge.to
-        ++ ": s "
+        ++ " ("
         ++ String.fromInt edge.label.unitsSent
-        ++ ", r "
+        ++ ", "
         ++ String.fromInt edge.label.unitsReceived
+        ++ ")"
 
 
 leftPanel model =

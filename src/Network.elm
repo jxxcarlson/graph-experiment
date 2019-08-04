@@ -4,7 +4,9 @@ module Network exposing
     , NodeState
     , Status(..)
     , accountList
+    , areConnected
     , changeAccountBalance
+    , changeContext
     , changeEdgeLabel
     , changeEdgeLabel1
     , computeForces
@@ -17,18 +19,21 @@ module Network exposing
     , getEdgeLabel
     , hiddenTestGraph
     , inComingNodeIds
+    , incrementOutgoingUnitsSent
     , incrementRecruitedCount
     , influencees
     , influencees2
     , influencers
     , initializeNode
     , integerSequence
+    , makeTransaction
     , moneySupply
+    , nodeBalance
     , nodeState
     , nodeState2
     , outGoingNodeIds
     , postTransactionToContext
-    , postTransactonToNetwork
+    , postTransactionToNetwork
     , randomListElement
     , randomPairs
     , randomTransaction
@@ -38,6 +43,7 @@ module Network exposing
     , reheatGraph
     , setStatus
     , setupGraph
+    , showEdgeLabel
     , testGraph
     , updateContextWithValue
     , zeroEdgeLabel
@@ -94,6 +100,16 @@ type alias NodeState =
     , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
+    }
+
+
+nodeStateForTest =
+    { name = "XXX"
+    , status = NotRecruited
+    , accountBalance = 0
+    , parentGraphId = -1
+    , numberRecruited = 0
+    , location = ( 0, 0 )
     }
 
 
@@ -190,36 +206,74 @@ randomTransaction mr1 mr2 amount graph =
         case ( maybeNodeId1, maybeNodeId2 ) of
             ( Just nodeId1, Just nodeId2 ) ->
                 graph
-                    |> creditNode nodeId2 amount
-                    |> debitNode nodeId1 amount
-                    |> connect nodeId1 nodeId2
-                    |> postTransactonToNetwork nodeId1 nodeId2 amount
+                    |> makeTransaction nodeId1 nodeId2 amount
                     |> (\g -> ( Just ( nodeId1, nodeId2 ), g ))
 
             _ ->
                 ( Nothing, graph )
 
 
-printPostTransactionToContext : NodeId -> NodeId -> Int -> NodeContext Entity EdgeLabel -> String
-printPostTransactionToContext n1 n2 amount ctx =
-    if ctx.node.id /= n1 then
-        "No match for " ++ String.fromInt n1
+makeTransaction : Int -> Int -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+makeTransaction i j amount graph =
+    graph
+        |> connectIf i j
+        |> creditNode j amount
+        |> debitNode i amount
+        |> postTransactionToNetwork i j amount
+        |> postTransactionToNetwork j i -amount
+
+
+nodeBalance : NodeId -> Graph Entity EdgeLabel -> Maybe Int
+nodeBalance i g =
+    g
+        |> Graph.nodes
+        |> List.filter (\node -> node.id == i)
+        |> List.head
+        |> Maybe.map (\n -> n.label.value.accountBalance)
+
+
+showEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
+showEdgeLabel i j g =
+    g
+        |> Graph.edges
+        |> List.filter (\e -> e.from == i && e.to == j)
+        |> List.head
+        |> Maybe.map (\e -> e.label)
+
+
+postTransactionToNetwork : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+postTransactionToNetwork n1 n2 amount g =
+    Graph.mapContexts (postTransactionToContext n1 n2 amount) g
+
+
+
+--
+
+
+changeContext : NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
+changeContext ctx =
+    { ctx | outgoing = IntDict.insert 1 { zeroEdgeLabel | unitsReceived = 666, unitsSent = 444 } ctx.outgoing }
+
+
+incrementOutgoingUnitsSent : NodeId -> NodeId -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
+incrementOutgoingUnitsSent i j ctx =
+    if ctx.node.id /= i then
+        ctx
 
     else
-        case ( IntDict.get n2 <| .incoming ctx, IntDict.get n2 <| .outgoing ctx ) of
+        case ( IntDict.get j <| .incoming ctx, IntDict.get j <| .outgoing ctx ) of
             ( Just edgeLabel, Nothing ) ->
-                "incoming: " ++ stringOfEdgeLabel edgeLabel
+                ctx
 
             ( Nothing, Just edgeLabel ) ->
-                "outging: " ++ stringOfEdgeLabel edgeLabel
+                let
+                    newOutgoing =
+                        IntDict.insert j { edgeLabel | unitsSent = edgeLabel.unitsSent + 1 } ctx.outgoing
+                in
+                { ctx | outgoing = newOutgoing }
 
             _ ->
-                "No match for " ++ String.fromInt n1 ++ ", " ++ String.fromInt n2
-
-
-postTransactonToNetwork : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-postTransactonToNetwork n1 n2 amount g =
-    Graph.mapContexts (postTransactionToContext n1 n2 amount) g
+                ctx
 
 
 postTransactionToContext : NodeId -> NodeId -> Int -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
@@ -229,10 +283,10 @@ postTransactionToContext n1 n2 amount ctx =
 
     else
         case ( IntDict.get n2 <| .incoming ctx, IntDict.get n2 <| .outgoing ctx ) of
-            ( Just edgeLabel, Nothing ) ->
+            ( Just edgeLabel, _ ) ->
                 { ctx | incoming = postTransactionToIncoming n2 amount ctx.incoming }
 
-            ( Nothing, Just edgeLabel ) ->
+            ( _, Just edgeLabel ) ->
                 { ctx | outgoing = postTransactionToOutGoing n2 amount ctx.outgoing }
 
             _ ->
@@ -248,7 +302,7 @@ postTransactionToIncoming nodeId amount intDict =
         Just edgeLabel ->
             let
                 newEdgeLabel =
-                    { edgeLabel | unitsReceived = edgeLabel.unitsReceived + amount }
+                    { edgeLabel | unitsSent = edgeLabel.unitsReceived - amount }
             in
             IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
 
@@ -583,6 +637,34 @@ connect from to graph =
             Graph.insert ctx graph
 
 
+connectIf : NodeId -> NodeId -> Graph n EdgeLabel -> Graph n EdgeLabel
+connectIf from to graph =
+    case newContext from to graph of
+        Nothing ->
+            graph
+
+        Just ctx ->
+            if areConnected from to graph then
+                graph
+
+            else
+                Graph.insert ctx graph
+
+
+areConnected : NodeId -> NodeId -> Graph n e -> Bool
+areConnected n1 n2 g =
+    let
+        folder =
+            \edge acc ->
+                if (edge.to == n1 && edge.from == n2) || (edge.to == n2 && edge.from == n1) then
+                    acc || True
+
+                else
+                    acc || False
+    in
+    g |> Graph.edges |> List.foldl folder False
+
+
 incrementRecruitedCount : NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 incrementRecruitedCount nodeId graph =
     Graph.mapNodes
@@ -799,7 +881,7 @@ recruitRandom numbers designatedRecruiter graph =
             List.filter (\n -> n.label.value.numberRecruited < 2) influenceeNodes_
 
         data =
-            Debug.log "data" (List.map (\n -> ( n.id, n.label.value.numberRecruited )) influenceeNodes)
+            List.map (\n -> ( n.id, n.label.value.numberRecruited )) influenceeNodes
 
         recruiter =
             randomListElement rn2 influenceeNodes
