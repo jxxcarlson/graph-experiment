@@ -3,6 +3,7 @@ module Network exposing
     , Entity
     , NodeState
     , Status(..)
+    , absoluteEdgeFlow
     , accountList
     , areConnected
     , changeAccountBalance
@@ -239,6 +240,11 @@ showEdgeLabel i j g =
         |> List.filter (\e -> e.from == i && e.to == j)
         |> List.head
         |> Maybe.map (\e -> e.label)
+
+
+absoluteEdgeFlow : Edge EdgeLabel -> Int
+absoluteEdgeFlow e =
+    abs e.label.unitsSent
 
 
 postTransactionToNetwork : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
