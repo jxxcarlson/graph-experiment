@@ -551,9 +551,13 @@ onMouseClick index =
     Mouse.onClick (.clientPos >> MouseClick index)
 
 
+
+-- GRAPH VIEW HELPERS --
+
+
 linkElement :
     Graph (Force.Entity Int { value : NodeState }) e
-    -> { a | from : Graph.NodeId, to : Graph.NodeId }
+    -> Edge EdgeLabel
     -> Svg msg
 linkElement graph edge =
     let
@@ -562,10 +566,18 @@ linkElement graph edge =
 
         target =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
+
+        color =
+            case Network.absoluteEdgeFlow edge of
+                0 ->
+                    Color.rgb255 255 255 255
+
+                _ ->
+                    Color.rgb255 0 0 255
     in
     line
-        [ strokeWidth 2
-        , stroke (Color.rgb255 255 255 255)
+        [ strokeWidth (toFloat <| Network.absoluteEdgeFlow edge + 1)
+        , stroke color
         , x1 source.x
         , y1 source.y
         , x2 target.x
@@ -647,7 +659,8 @@ mainColumn model =
             [ leftPanel model
             , rightPanel model
             ]
-        , el [ Font.size 14 ] (displayEdges model.graph)
+
+        --, el [ Font.size 14 ] (displayEdges model.graph)
         ]
 
 
