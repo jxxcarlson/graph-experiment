@@ -96,9 +96,7 @@ type GraphBehavior
 
 
 
---
--- MODEL
---
+-- MODEL --
 
 
 type alias Model =

@@ -45,6 +45,7 @@ module Network exposing
     , setStatus
     , setupGraph
     , showEdgeLabel
+    , simplifyGraph
     , testGraph
     , updateContextWithValue
     , zeroEdgeLabel
@@ -65,6 +66,15 @@ import PseudoRandom
 
 type alias Entity =
     Force.Entity NodeId { value : NodeState }
+
+
+simplifyGraph : Graph Entity EdgeLabel -> Graph NodeState EdgeLabel
+simplifyGraph g =
+    Graph.mapNodes (\n -> n.value) g
+
+
+
+-- entityToSimpleNode : Entity -> Node
 
 
 type alias EdgeLabel =
