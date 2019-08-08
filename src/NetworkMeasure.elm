@@ -1,4 +1,15 @@
-module NetworkMeasure exposing (alpha, efficiency, efficiencyOfEdge, removeEdgesOfWeightZero, resilience, resilienceOfEdge, roundTo, sustainability, sustainabilityPercentage, totalFlow)
+module NetworkMeasure exposing
+    ( alpha
+    , efficiency
+    , efficiencyOfEdge
+    , giniIndex
+    , resilience
+    , resilienceOfEdge
+    , roundTo
+    , sustainability
+    , sustainabilityPercentage
+    , totalFlow
+    )
 
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
@@ -9,6 +20,68 @@ import Network exposing (EdgeLabel, NodeState, SimpleGraph)
 {-
    Functions for the model
 -}
+
+
+epsilon =
+    0.000001
+
+
+accountBalances : SimpleGraph -> List Float
+accountBalances g =
+    g
+        |> Graph.nodes
+        |> List.map (.label >> .accountBalance >> toFloat)
+
+
+
+-- giniIndex : SimpleGraph -> Float
+
+
+giniIndex g =
+    let
+        balances =
+            accountBalances g
+
+        n =
+            List.length balances |> toFloat
+
+        meanBalance =
+            List.sum balances / n
+
+        absoluteDifferences =
+            differences balances |> List.map abs
+    in
+    List.sum absoluteDifferences / (n * n * meanBalance)
+
+
+{-|
+
+    > differences [1,2,3,4]
+    [1,2,3,1,2,1]
+
+-}
+differences lst =
+    let
+        postfixList_ =
+            postfixList lst
+
+        differencesForPair pair =
+            let
+                ( x, lst_ ) =
+                    pair
+            in
+            List.map (\item -> item - x) lst_
+    in
+    List.map differencesForPair postfixList_ |> List.concat
+
+
+
+-- postfixList : List a -> List ( a, List a )
+
+
+postfixList lst =
+    List.indexedMap (\k item -> ( item, List.drop (k + 1) lst )) lst
+        |> List.take (List.length lst - 1)
 
 
 removeEdgesOfWeightZero : SimpleGraph -> SimpleGraph
@@ -41,7 +114,7 @@ outflowFromNode nodeId g =
             0
 
         Just ctx ->
-            edgeFlow ctx.outgoing
+            edgeFlow ctx.outgoing |> abs
 
 
 inflowToNode : NodeId -> SimpleGraph -> Float
@@ -51,67 +124,70 @@ inflowToNode nodeId g =
             0
 
         Just ctx ->
-            edgeFlow ctx.incoming
+            edgeFlow ctx.incoming |> abs
 
 
 totalFlow : SimpleGraph -> Float
 totalFlow g =
     g
         |> Graph.edges
-        |> List.map (.label >> .unitsSent >> toFloat)
+        |> List.map (.label >> .unitsSent >> abs >> toFloat)
         |> List.sum
 
 
 edgeFlow : IntDict EdgeLabel -> Float
 edgeFlow intDict =
     IntDict.values intDict
-        |> List.map (.unitsSent >> toFloat)
+        |> List.map (.unitsSent >> abs >> toFloat)
         |> List.sum
-
-
-fixDenominator : Float -> Float
-fixDenominator x =
-    if abs x < 0.000001 then
-        1
-
-    else
-        x
 
 
 efficiencyOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
 efficiencyOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
-            edge.label.unitsSent |> toFloat
+            edge.label.unitsSent |> toFloat |> abs
 
         denominator =
-            fixDenominator <| outflowFromNode edge.from g * inflowToNode edge.to g
+            outflowFromNode edge.from g * inflowToNode edge.to g
 
         numerator =
             edgeFlow_ * totalFlow_
-
-        logRatio =
-            logBase 2 (numerator / denominator)
     in
-    roundTo 3 (edgeFlow_ * logRatio)
+    case abs denominator < epsilon || abs numerator < epsilon of
+        True ->
+            0
+
+        False ->
+            let
+                logRatio =
+                    logBase 2 (numerator / denominator)
+            in
+            roundTo 3 (edgeFlow_ * logRatio)
 
 
 resilienceOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
 resilienceOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
-            edge.label.unitsSent |> toFloat
+            edge.label.unitsSent |> toFloat |> abs
 
         denominator =
-            fixDenominator <| outflowFromNode edge.from g * inflowToNode edge.to g
+            outflowFromNode edge.from g * inflowToNode edge.to g
 
         numerator =
             edgeFlow_ * edgeFlow_
-
-        logRatio =
-            logBase 2 (numerator / denominator)
     in
-    edgeFlow_ * logRatio
+    case abs denominator < epsilon || abs numerator < epsilon of
+        True ->
+            0
+
+        False ->
+            let
+                logRatio =
+                    logBase 2 (numerator / denominator)
+            in
+            edgeFlow_ * logRatio
 
 
 efficiency : SimpleGraph -> Float
@@ -139,10 +215,18 @@ resilience g =
 alpha : SimpleGraph -> Float
 alpha g =
     let
-        ratio =
-            1 + resilience g / efficiency g
+        eff =
+            efficiency g
     in
-    1 / ratio
+    if abs eff < epsilon then
+        0
+
+    else
+        let
+            ratio =
+                1 + resilience g / efficiency g
+        in
+        1 / ratio
 
 
 sustainability : SimpleGraph -> Float
@@ -153,11 +237,12 @@ sustainability g =
 
         aa =
             a ^ 1.288
-
-        s =
-            -1.844 * aa * logBase 2 aa
     in
-    roundTo 4 s
+    if abs aa < epsilon then
+        0
+
+    else
+        -1.844 * aa * logBase 2 aa
 
 
 sustainabilityPercentage : SimpleGraph -> Float

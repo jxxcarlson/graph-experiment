@@ -733,11 +733,15 @@ controlPanel model =
 measures model =
     let
         sg =
-            Network.simplifyGraph model.graph |> NM.removeEdgesOfWeightZero
+            Network.simplifyGraph model.graph
+
+        -- |> NM.removeEdgesOfWeightZero
     in
-    { sustainability = NM.sustainability sg |> NM.roundTo 2
+    { sustainability = NM.sustainabilityPercentage sg |> NM.roundTo 2
     , totalFlow = NM.totalFlow sg |> NM.roundTo 2
+    , resilience = NM.resilience sg |> NM.roundTo 2
     , efficiency = NM.efficiency sg |> NM.roundTo 2
+    , gini = NM.giniIndex sg |> NM.roundTo 2
     }
 
 
@@ -748,9 +752,11 @@ displayMeasures model =
             measures model
     in
     row [ spacing 12 ]
-        [ el [] (text <| "sus: " ++ String.fromFloat m.sustainability)
-        , el [] (text <| "tf: " ++ String.fromFloat m.totalFlow)
+        [ el [] (text <| "tf: " ++ String.fromFloat m.totalFlow)
+        , el [] (text <| "gini: " ++ String.fromFloat m.gini)
+        , el [] (text <| "sus: " ++ String.fromFloat m.sustainability)
         , el [] (text <| "eff: " ++ String.fromFloat m.efficiency)
+        , el [] (text <| "res: " ++ String.fromFloat m.resilience)
         ]
 
 
