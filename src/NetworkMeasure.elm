@@ -1,6 +1,8 @@
-module NewtworkMeasure exposing (alpha, efficiency, efficiencyOfEdge, resilience, resilienceOfEdge, roundTo, sustainability, sustainabilityPercentage)
+module NetworkMeasure exposing (alpha, efficiency, efficiencyOfEdge, removeEdgesOfWeightZero, resilience, resilienceOfEdge, roundTo, sustainability, sustainabilityPercentage, totalFlow)
 
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
+import IntDict exposing (IntDict)
+import Network exposing (EdgeLabel, NodeState, SimpleGraph)
 
 
 
@@ -9,17 +11,81 @@ import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 -}
 
 
-efficiencyOfEdge : Float -> Graph -> Edge -> Float
-efficiencyOfEdge totalFlow_ network (Edge sourceNode sinkNode flow) =
-    let
-        edge =
-            Edge sourceNode sinkNode flow
+removeEdgesOfWeightZero : SimpleGraph -> SimpleGraph
+removeEdgesOfWeightZero g =
+    Graph.mapContexts (transformOutgoing >> transformIncoming) g
 
+
+transformOutgoing : NodeContext NodeState EdgeLabel -> NodeContext NodeState EdgeLabel
+transformOutgoing ctx =
+    if edgeFlow ctx.outgoing == 0 then
+        { ctx | outgoing = IntDict.empty }
+
+    else
+        ctx
+
+
+transformIncoming : NodeContext NodeState EdgeLabel -> NodeContext NodeState EdgeLabel
+transformIncoming ctx =
+    if edgeFlow ctx.incoming == 0 then
+        { ctx | outgoing = IntDict.empty }
+
+    else
+        ctx
+
+
+outflowFromNode : NodeId -> SimpleGraph -> Float
+outflowFromNode nodeId g =
+    case Graph.get nodeId g of
+        Nothing ->
+            0
+
+        Just ctx ->
+            edgeFlow ctx.outgoing
+
+
+inflowToNode : NodeId -> SimpleGraph -> Float
+inflowToNode nodeId g =
+    case Graph.get nodeId g of
+        Nothing ->
+            0
+
+        Just ctx ->
+            edgeFlow ctx.incoming
+
+
+totalFlow : SimpleGraph -> Float
+totalFlow g =
+    g
+        |> Graph.edges
+        |> List.map (.label >> .unitsSent >> toFloat)
+        |> List.sum
+
+
+edgeFlow : IntDict EdgeLabel -> Float
+edgeFlow intDict =
+    IntDict.values intDict
+        |> List.map (.unitsSent >> toFloat)
+        |> List.sum
+
+
+fixDenominator : Float -> Float
+fixDenominator x =
+    if abs x < 0.000001 then
+        1
+
+    else
+        x
+
+
+efficiencyOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
+efficiencyOfEdge totalFlow_ g edge =
+    let
         edgeFlow_ =
-            edgeFlow edge
+            edge.label.unitsSent |> toFloat
 
         denominator =
-            outflowFromNode network sourceNode * inflowToNode network sinkNode
+            fixDenominator <| outflowFromNode edge.from g * inflowToNode edge.to g
 
         numerator =
             edgeFlow_ * totalFlow_
@@ -30,17 +96,14 @@ efficiencyOfEdge totalFlow_ network (Edge sourceNode sinkNode flow) =
     roundTo 3 (edgeFlow_ * logRatio)
 
 
-resilienceOfEdge : Float -> Graph -> Edge -> Float
-resilienceOfEdge totalFlow_ network (Edge sourceNode sinkNode flow) =
+resilienceOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
+resilienceOfEdge totalFlow_ g edge =
     let
-        edge =
-            Edge sourceNode sinkNode flow
-
         edgeFlow_ =
-            edgeFlow edge
+            edge.label.unitsSent |> toFloat
 
         denominator =
-            outflowFromNode network sourceNode * inflowToNode network sinkNode
+            fixDenominator <| outflowFromNode edge.from g * inflowToNode edge.to g
 
         numerator =
             edgeFlow_ * edgeFlow_
@@ -51,48 +114,42 @@ resilienceOfEdge totalFlow_ network (Edge sourceNode sinkNode flow) =
     edgeFlow_ * logRatio
 
 
-efficiency : Graph -> Float
-efficiency (Graph nodes edges) =
+efficiency : SimpleGraph -> Float
+efficiency g =
     let
-        network =
-            Graph nodes edges
-
         totalFlow_ =
-            totalFlow network
+            totalFlow g
     in
-    List.map (efficiencyOfEdge totalFlow_ network) edges
+    List.map (efficiencyOfEdge totalFlow_ g) (Graph.edges g)
         |> List.sum
         |> (\x -> roundTo 3 x)
 
 
-resilience : Graph -> Float
-resilience (Graph nodes edges) =
+resilience : SimpleGraph -> Float
+resilience g =
     let
-        network =
-            Graph nodes edges
-
         totalFlow_ =
-            totalFlow network
+            totalFlow g
     in
-    List.map (resilienceOfEdge totalFlow_ network) edges
+    List.map (resilienceOfEdge totalFlow_ g) (Graph.edges g)
         |> List.sum
         |> (\x -> -(roundTo 3 x))
 
 
-alpha : Graph -> Float
-alpha graph =
+alpha : SimpleGraph -> Float
+alpha g =
     let
         ratio =
-            1 + (resilience network / efficiency network)
+            1 + resilience g / efficiency g
     in
     1 / ratio
 
 
-sustainability : Graph -> Float
-sustainability graph =
+sustainability : SimpleGraph -> Float
+sustainability g =
     let
         a =
-            alpha network
+            alpha g
 
         aa =
             a ^ 1.288
@@ -103,9 +160,9 @@ sustainability graph =
     roundTo 4 s
 
 
-sustainabilityPercentage : Graph -> Float
-sustainabilityPercentage network =
-    roundTo 2 (100 * sustainability network)
+sustainabilityPercentage : SimpleGraph -> Float
+sustainabilityPercentage g =
+    roundTo 2 (100 * sustainability g)
 
 
 

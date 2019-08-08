@@ -1,7 +1,6 @@
-module SampleData exposing (testGraph, g, gg, newNode)
+module SampleData exposing (g, gg, newNode, testGraph)
 
-
-import Graph exposing(..)
+import Graph exposing (..)
 import IntDict
 
 
@@ -11,17 +10,20 @@ testGraph =
         [ ( 0, 1 ), ( 0, 2 ), ( 0, 3 ), ( 0, 4 ), ( 0, 5 ), ( 6, 7 ), ( 6, 8 ), ( 6, 9 ), ( 6, 10 ), ( 6, 11 ) ]
 
 
-g = Graph.fromNodeLabelsAndEdgePairs
-            [ "A", "B"]
-            [ ]
+g =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ "A", "B" ]
+        []
 
-gg = Graph.fromNodeLabelsAndEdgePairs
-            [ "A", "B"]
-            [(0, 1)]
+
+gg =
+    Graph.fromNodeLabelsAndEdgePairs
+        [ "A", "B" ]
+        [ ( 0, 1 ) ]
+
 
 newNode =
-  { node = Node 2 "2"
-  , incoming = IntDict.empty
-  , outgoing = IntDict.singleton 1 ()  -- so there will be an edge from 0 to `
-  }
-
+    { node = Node 2 "2"
+    , incoming = IntDict.empty
+    , outgoing = IntDict.singleton 1 () -- so there will be an edge from 0 to `
+    }

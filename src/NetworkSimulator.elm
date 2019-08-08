@@ -23,6 +23,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import List.Extra
 import Network exposing (EdgeLabel, Entity, NodeState, Status(..), creditNode, moneySupply)
+import NetworkMeasure as NM
 import Random
 import SimpleGraph
 import Time
@@ -622,21 +623,21 @@ nodeElement model node =
 nodeColorizer node =
     case node.label.value.status of
         NotRecruited ->
-            fill (Fill (Color.rgb255 0 0 255))
+            TypedSvg.Attributes.fill (Fill (Color.rgb255 0 0 255))
 
         Recruited ->
             case node.label.value.parentGraphId of
                 100 ->
-                    fill (Fill (Color.rgb255 244 65 238))
+                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 65 238))
 
                 0 ->
-                    fill (Fill (Color.rgb255 0 180 0))
+                    TypedSvg.Attributes.fill (Fill (Color.rgb255 0 180 0))
 
                 1 ->
-                    fill (Fill (Color.rgb255 244 128 65))
+                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 128 65))
 
                 _ ->
-                    fill (Fill (Color.rgb255 244 65 238))
+                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 65 238))
 
 
 
@@ -725,6 +726,31 @@ controlPanel model =
         , accountDisplay model
         , row [] [ el [] (text <| "Number of transactions: " ++ String.fromInt model.numberOfTransactionsToDate) ]
         , row [ Font.size 12 ] [ el [] (text model.message) ]
+        , displayMeasures model
+        ]
+
+
+measures model =
+    let
+        sg =
+            Network.simplifyGraph model.graph |> NM.removeEdgesOfWeightZero
+    in
+    { sustainability = NM.sustainability sg |> NM.roundTo 2
+    , totalFlow = NM.totalFlow sg |> NM.roundTo 2
+    , efficiency = NM.efficiency sg |> NM.roundTo 2
+    }
+
+
+displayMeasures : Model -> Element Msg
+displayMeasures model =
+    let
+        m =
+            measures model
+    in
+    row [ spacing 12 ]
+        [ el [] (text <| "sus: " ++ String.fromFloat m.sustainability)
+        , el [] (text <| "tf: " ++ String.fromFloat m.totalFlow)
+        , el [] (text <| "eff: " ++ String.fromFloat m.efficiency)
         ]
 
 

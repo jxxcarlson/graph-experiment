@@ -2,6 +2,7 @@ module Network exposing
     ( EdgeLabel
     , Entity
     , NodeState
+    , SimpleGraph
     , Status(..)
     , absoluteEdgeFlow
     , accountList
@@ -66,6 +67,10 @@ import PseudoRandom
 
 type alias Entity =
     Force.Entity NodeId { value : NodeState }
+
+
+type alias SimpleGraph =
+    Graph NodeState EdgeLabel
 
 
 simplifyGraph : Graph Entity EdgeLabel -> Graph NodeState EdgeLabel
