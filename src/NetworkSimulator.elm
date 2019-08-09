@@ -440,6 +440,7 @@ advanceGameState model =
                 , grid = Grid.cellGridFromGraph gridWidth graph
                 , simulation = Force.simulation forces
                 , clickCount = 0
+                , history = []
                 , gameClock = 0
                 , gameState = newGameState
             }
