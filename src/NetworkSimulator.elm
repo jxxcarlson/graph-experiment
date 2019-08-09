@@ -100,6 +100,29 @@ type GraphBehavior
 -- MODEL --
 
 
+type alias Measures =
+    { sustainability : Float
+    , totalFlow : Float
+    , resilience : Float
+    , efficiency : Float
+    , gini : Float
+    }
+
+
+measures : Model -> Measures
+measures model =
+    let
+        sg =
+            Network.simplifyGraph model.graph
+    in
+    { sustainability = NM.sustainabilityPercentage sg |> NM.roundTo 2
+    , totalFlow = NM.totalFlow sg |> NM.roundTo 2
+    , resilience = NM.resilience sg |> NM.roundTo 2
+    , efficiency = NM.efficiency sg |> NM.roundTo 2
+    , gini = NM.giniIndex sg |> NM.roundTo 2
+    }
+
+
 type alias Model =
     { drag : Maybe Drag
     , recruiter : NodeId
@@ -115,6 +138,7 @@ type alias Model =
     , randomNumberList : List Float
     , displayMode : DisplayMode
     , grid : CellGrid Grid.Cell
+    , history : List Measures
     }
 
 
@@ -165,6 +189,7 @@ init _ =
       , randomNumberList = []
       , displayMode = DisplayGraph
       , grid = Grid.cellGridFromGraph gridWidth graph -- Grid.empty gridWidth gridWidth
+      , history = []
       }
     , Cmd.none
     )
@@ -371,6 +396,13 @@ update msg model =
                 recruitCount1 =
                     Grid.recruitedCount model.grid
 
+                nextHistory =
+                    if modBy recruitInterval model.gameClock == 1 then
+                        measures model :: model.history
+
+                    else
+                        model.history
+
                 ( deltaRecuiterAccount, newGraph1 ) =
                     -- New recruitees recruit other nodes at random
                     case
@@ -439,6 +471,7 @@ update msg model =
                 , grid = newGrid
                 , gameState = newGameState
                 , message = message
+                , history = nextHistory
                 , numberOfTransactionsToDate = model.numberOfTransactionsToDate + deltaTransactions
               }
             , sendAudioMessage audioMsg
@@ -456,6 +489,7 @@ update msg model =
                 | gameState = Ready
                 , gameClock = 0
                 , clickCount = 0
+                , history = []
                 , graph = graph
                 , simulation = Force.simulation forces
                 , grid = Grid.cellGridFromGraph gridWidth graph
@@ -464,46 +498,58 @@ update msg model =
             )
 
         CellGrid msg_ ->
-            if model.gameState /= Running then
-                ( model, Cmd.none )
+            handleMouseClickInGrid model msg_
 
-            else
-                case msg_ of
-                    CellGrid.MouseClick ( i, j ) ( x, y ) ->
-                        let
-                            index =
-                                case CellGrid.cellAtMatrixIndex ( i, j ) model.grid of
-                                    Nothing ->
-                                        -1
 
-                                    Just cell ->
-                                        cell.id
 
-                            associatedOutgoingNodeIds =
-                                Network.outGoingNodeIds index model.hiddenGraph
+-- UPDATE HELPERS --
 
-                            audioMsg =
-                                case List.length associatedOutgoingNodeIds == 0 of
-                                    True ->
-                                        Chirp
 
-                                    False ->
-                                        LongChirp
+handleMouseClickInGrid model msg_ =
+    if model.gameState /= Running then
+        ( model, Cmd.none )
 
-                            newGraph =
-                                Network.setStatus index Recruited model.graph
-                                    |> Network.changeAccountBalance index 10
-                                    |> Network.connect model.recruiter index
-                                    |> Network.incrementRecruitedCount model.recruiter
-                                    |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+    else
+        case msg_ of
+            CellGrid.MouseClick ( i, j ) ( x, y ) ->
+                let
+                    index =
+                        case CellGrid.cellAtMatrixIndex ( i, j ) model.grid of
+                            Nothing ->
+                                -1
 
-                            newGrid =
-                                Grid.cellGridFromGraph gridWidth newGraph
+                            Just cell ->
+                                cell.id
 
-                            message =
-                                "cellGrid: mouse click"
-                        in
-                        ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
+                    associatedOutgoingNodeIds =
+                        Network.outGoingNodeIds index model.hiddenGraph
+
+                    audioMsg =
+                        case List.length associatedOutgoingNodeIds == 0 of
+                            True ->
+                                Chirp
+
+                            False ->
+                                LongChirp
+
+                    newGraph =
+                        Network.setStatus index Recruited model.graph
+                            |> Network.changeAccountBalance index 10
+                            |> Network.connect model.recruiter index
+                            |> Network.incrementRecruitedCount model.recruiter
+                            |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+
+                    newGrid =
+                        Grid.cellGridFromGraph gridWidth newGraph
+
+                    message =
+                        "cellGrid: mouse click"
+                in
+                ( { model | message = message, graph = newGraph, grid = newGrid }, sendAudioMessage audioMsg )
+
+
+
+-- /UPDATE HELPERS --
 
 
 getRandomNumbers : Cmd Msg
@@ -730,19 +776,8 @@ controlPanel model =
         ]
 
 
-measures model =
-    let
-        sg =
-            Network.simplifyGraph model.graph
 
-        -- |> NM.removeEdgesOfWeightZero
-    in
-    { sustainability = NM.sustainabilityPercentage sg |> NM.roundTo 2
-    , totalFlow = NM.totalFlow sg |> NM.roundTo 2
-    , resilience = NM.resilience sg |> NM.roundTo 2
-    , efficiency = NM.efficiency sg |> NM.roundTo 2
-    , gini = NM.giniIndex sg |> NM.roundTo 2
-    }
+-- DISPLAY MEASURES --
 
 
 displayMeasures : Model -> Element Msg
@@ -760,6 +795,10 @@ displayMeasures model =
         ]
 
 
+
+-- DISPLAY ACCOUNTS AND MONEY SUPPLY --
+
+
 accountDisplay : Model -> Element Msg
 accountDisplay model =
     column [ paddingXY 0 12 ]
@@ -769,43 +808,6 @@ accountDisplay model =
             , numberOfTradersDisplay model
             ]
         ]
-
-
-accountChart : Graph Entity EdgeLabel -> Element Msg
-accountChart graph =
-    let
-        data =
-            Network.accountList graph
-                |> List.map (Tuple.second >> toFloat)
-    in
-    SimpleGraph.barChart barGraphAttributes data |> Element.html
-
-
-barGraphAttributes =
-    { graphHeight = 70
-    , graphWidth = 300
-    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 15, SimpleGraph.YTickmarks 6, SimpleGraph.XTickmarks 2 ]
-    }
-
-
-influenceesDisplay : Model -> Element Msg
-influenceesDisplay model =
-    let
-        ii =
-            Network.influencees model.recruiter model.graph
-                |> List.map String.fromInt
-                |> String.join ", "
-    in
-    el [] (text <| "Influencees: " ++ ii)
-
-
-recruitedDisplay : Model -> Element Msg
-recruitedDisplay model =
-    let
-        n =
-            Grid.recruitedCount model.grid - 1 |> String.fromInt
-    in
-    el [] (text <| "Recruited: " ++ n)
 
 
 moneySupplyDisplay : Model -> Element Msg
@@ -828,6 +830,81 @@ numberOfTradersDisplay model =
             List.length <| Network.filterNodes nodeFilter model.graph
     in
     el [] (text <| "Trading population = " ++ String.fromInt n)
+
+
+
+-- CHARTS --
+
+
+accountChart : Graph Entity EdgeLabel -> Element Msg
+accountChart graph =
+    let
+        data =
+            Network.accountList graph
+                |> List.map (Tuple.second >> toFloat)
+                |> List.reverse
+    in
+    SimpleGraph.barChart barGraphAttributes data |> Element.html
+
+
+sustainabilityChart : Model -> Element Msg
+sustainabilityChart model =
+    let
+        data =
+            List.map .sustainability model.history
+                |> List.take 100
+                |> List.reverse
+    in
+    SimpleGraph.barChart wideBarGraphAttributes data |> Element.html
+
+
+giniChart : Model -> Element Msg
+giniChart model =
+    let
+        data =
+            List.map .gini model.history
+                |> List.take 100
+                |> List.reverse
+    in
+    SimpleGraph.barChart wideBarGraphAttributes data |> Element.html
+
+
+barGraphAttributes =
+    { graphHeight = 70
+    , graphWidth = 300
+    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 15, SimpleGraph.YTickmarks 6, SimpleGraph.XTickmarks 2 ]
+    }
+
+
+wideBarGraphAttributes =
+    { graphHeight = 35
+    , graphWidth = 420
+    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 4, SimpleGraph.YTickmarks 6, SimpleGraph.XTickmarks 2 ]
+    }
+
+
+
+-- DISPLAY INFLUENCER --
+
+
+influenceesDisplay : Model -> Element Msg
+influenceesDisplay model =
+    let
+        ii =
+            Network.influencees model.recruiter model.graph
+                |> List.map String.fromInt
+                |> String.join ", "
+    in
+    el [] (text <| "Influencees: " ++ ii)
+
+
+recruitedDisplay : Model -> Element Msg
+recruitedDisplay model =
+    let
+        n =
+            Grid.recruitedCount model.grid - 1 |> String.fromInt
+    in
+    el [] (text <| "Recruited: " ++ n)
 
 
 influenceesDisplay2 : Model -> Element Msg
@@ -883,6 +960,8 @@ rightPanel model =
 
             DisplayGrid ->
                 viewGrid model 500 500 |> Element.html
+        , sustainabilityChart model
+        , giniChart model
         ]
 
 
@@ -937,9 +1016,7 @@ viewGraph model w h =
 
 
 
---
--- BUTTONS
---
+-- BUTTONS --
 
 
 displayGraphButton : Model -> Element Msg

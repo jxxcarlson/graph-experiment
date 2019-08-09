@@ -51,7 +51,11 @@ giniIndex g =
         absoluteDifferences =
             differences balances |> List.map abs
     in
-    List.sum absoluteDifferences / (n * n * meanBalance)
+    if abs meanBalance < epsilon then
+        0
+
+    else
+        List.sum absoluteDifferences / (n * n * meanBalance)
 
 
 {-|
