@@ -459,7 +459,7 @@ randomUpdate model numbers =
                     ( 1, Network.recruitRandom numbers model.recruiter model.graph )
 
         ( transactionRecord, newGraph ) =
-            case modBy recruitInterval model.gameClock == transactionStep && model.gameState == Running of
+            case modBy recruitInterval model.gameClock == transactionStep && model.gameState /= Paused of
                 False ->
                     ( Nothing, newGraph1 )
 
@@ -934,8 +934,8 @@ barGraphAttributes =
 
 wideBarGraphAttributes =
     { graphHeight = 35
-    , graphWidth = 420
-    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 11, SimpleGraph.YTickmarks 5, SimpleGraph.XTickmarks 2 ]
+    , graphWidth = 370
+    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 2, SimpleGraph.YTickmarks 5, SimpleGraph.XTickmarks 11 ]
     }
 
 
@@ -1009,15 +1009,21 @@ recruitedNodes model =
 
 rightPanel : Model -> Element Msg
 rightPanel model =
-    column [ spacing 12, width (px 500), Border.width 1 ]
+    column [ spacing 12, width (px 500), height (px 680), Border.width 1 ]
         [ case model.displayMode of
             DisplayGraph ->
                 viewGraph model 500 500 |> Element.html
 
             DisplayGrid ->
                 viewGrid model 500 500 |> Element.html
-        , sustainabilityChart model
-        , giniChart model
+        , row [ paddingXY 12 0 ]
+            [ el [ Font.size 12, width (px 30) ] (text "Sust.")
+            , sustainabilityChart model
+            ]
+        , row [ paddingXY 12 0 ]
+            [ el [ Font.size 12, width (px 30) ] (text "Gini")
+            , giniChart model
+            ]
         ]
 
 
