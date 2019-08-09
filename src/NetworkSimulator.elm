@@ -134,6 +134,8 @@ type alias Model =
     , simulation : Force.State NodeId
     , message : String
     , gameClock : Int
+    , gameOverCount : Int
+    , clickCountAtGameOver : Int
     , gameState : GameState
     , randomNumberList : List Float
     , displayMode : DisplayMode
@@ -149,7 +151,7 @@ type DisplayMode
 
 type GameState
     = Ready
-    | Running
+    | Phase1
     | Paused
     | Phase2
     | GameEnding
@@ -186,6 +188,8 @@ init _ =
       , simulation = Force.simulation forces
       , message = "No message yet"
       , gameClock = 0
+      , gameOverCount = 0
+      , clickCountAtGameOver = 0
       , gameState = Ready
       , randomNumberList = []
       , displayMode = DisplayGraph
@@ -320,7 +324,16 @@ handleTick model t =
 
 handleGameTick model t =
     case model.gameState of
-        Running ->
+        Phase1 ->
+            ( { model
+                | gameClock = model.gameClock + 1
+                , gameOverCount = model.gameClock + 1
+                , clickCountAtGameOver = model.clickCount
+              }
+            , getRandomNumbers
+            )
+
+        Phase2 ->
             ( { model | gameClock = model.gameClock + 1 }, getRandomNumbers )
 
         _ ->
@@ -328,7 +341,7 @@ handleGameTick model t =
 
 
 handleMouseClick model index xy =
-    if model.gameState /= Running then
+    if model.gameState /= Phase1 then
         ( model, Cmd.none )
 
     else
@@ -399,13 +412,13 @@ advanceGameState model =
         newGameState =
             case model.gameState of
                 Ready ->
-                    Running
+                    Phase1
 
-                Running ->
+                Phase1 ->
                     Paused
 
                 Paused ->
-                    Running
+                    Phase1
 
                 Phase2 ->
                     GameOver
@@ -441,20 +454,10 @@ randomUpdate model numbers =
         recruitCount1 =
             Grid.recruitedCount model.grid
 
-        nextHistory =
-            if modBy recruitInterval model.gameClock == 1 then
-                measures model :: model.history
-
-            else
-                model.history
-
         ( deltaRecuiterAccount, newGraph1 ) =
             -- New recruitees recruit other nodes at random
             case
-                model.gameState
-                    == Running
-                    && modBy recruitInterval model.gameClock
-                    == recruitStep
+                model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep
             of
                 False ->
                     ( 0, model.graph )
@@ -463,7 +466,7 @@ randomUpdate model numbers =
                     ( 1, Network.recruitRandom numbers model.recruiter model.graph )
 
         ( transactionRecord, newGraph ) =
-            case modBy recruitInterval model.gameClock == transactionStep && model.gameState /= Paused of
+            case model.gameState == Phase2 of
                 False ->
                     ( Nothing, newGraph1 )
 
@@ -490,7 +493,7 @@ randomUpdate model numbers =
                     Grid.recruitedCount model.grid == Graph.size model.graph
             in
             case ( model.gameState, everyoneRecruited ) of
-                ( Running, True ) ->
+                ( Phase1, True ) ->
                     Phase2
 
                 ( GameEnding, _ ) ->
@@ -499,12 +502,19 @@ randomUpdate model numbers =
                 _ ->
                     model.gameState
 
+        nextHistory =
+            if model.gameState == Phase2 || (model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep) then
+                measures model :: model.history
+
+            else
+                model.history
+
         audioMsg =
             case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
                 ( GameEnding, _ ) ->
                     VeryLongChirp
 
-                ( Running, True ) ->
+                ( Phase1, True ) ->
                     Coo
 
                 _ ->
@@ -542,7 +552,7 @@ resetGame model =
 
 
 handleMouseClickInGrid model msg_ =
-    if model.gameState /= Running then
+    if model.gameState /= Phase1 then
         ( model, Cmd.none )
 
     else
@@ -895,7 +905,7 @@ sustainabilityChart model =
                 |> List.take 100
                 |> List.reverse
     in
-    SimpleGraph.lineChartWithDataWindow dataWindow2 wideBarGraphAttributes data |> Element.html
+    SimpleGraph.lineChartWithDataWindow (dataWindow2 n) wideBarGraphAttributes data |> Element.html
 
 
 giniChart : Model -> Element Msg
@@ -906,11 +916,11 @@ giniChart model =
 
         data =
             List.map .gini model.history
-                |> List.indexedMap (\k y -> ( 100 * toFloat (n - k), y ))
+                |> List.indexedMap (\k y -> ( toFloat (n - k), y ))
                 |> List.take 100
                 |> List.reverse
     in
-    SimpleGraph.lineChartWithDataWindow dataWindow2 wideBarGraphAttributes data |> Element.html
+    SimpleGraph.lineChartWithDataWindow (dataWindow2 n) wideBarGraphAttributes data |> Element.html
 
 
 dataWindow =
@@ -921,10 +931,21 @@ dataWindow =
     }
 
 
-dataWindow2 =
-    { xMax = 100.0
-    , xMin = 0.0
-    , yMin = 0.0
+dataWindow2 : Int -> SimpleGraph.DataWindow
+dataWindow2 n =
+    let
+        n_ =
+            toFloat n
+
+        a =
+            max 0 (n_ - 100)
+
+        b =
+            max 100.0 n_
+    in
+    { xMin = a
+    , xMax = b
+    , yMin = 0
     , yMax = 100.0
     }
 
@@ -992,10 +1013,10 @@ scoreIndicator : Model -> Element Msg
 scoreIndicator model =
     let
         cc =
-            toFloat <| model.clickCount
+            toFloat <| model.clickCountAtGameOver
 
         gc =
-            toFloat <| model.gameClock
+            toFloat <| model.gameOverCount
 
         rn =
             toFloat <| List.length <| recruitedNodes model
@@ -1132,8 +1153,8 @@ controlButtonTitle model =
         Ready ->
             "Ready"
 
-        Running ->
-            "Running"
+        Phase1 ->
+            "Recruiting"
 
         Paused ->
             "Paused"

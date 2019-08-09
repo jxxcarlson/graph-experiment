@@ -55,7 +55,7 @@ giniIndex g =
         0
 
     else
-        List.sum absoluteDifferences / (n * n * meanBalance)
+        100 * List.sum absoluteDifferences / (n * n * meanBalance)
 
 
 {-|
