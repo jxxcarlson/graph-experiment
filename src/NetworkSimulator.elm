@@ -151,6 +151,7 @@ type GameState
     = Ready
     | Running
     | Paused
+    | Phase2
     | GameEnding
     | GameOver
 
@@ -406,6 +407,9 @@ advanceGameState model =
                 Paused ->
                     Running
 
+                Phase2 ->
+                    GameOver
+
                 GameOver ->
                     Ready
 
@@ -487,7 +491,7 @@ randomUpdate model numbers =
             in
             case ( model.gameState, everyoneRecruited ) of
                 ( Running, True ) ->
-                    GameEnding
+                    Phase2
 
                 ( GameEnding, _ ) ->
                     GameOver
@@ -902,11 +906,11 @@ giniChart model =
 
         data =
             List.map .gini model.history
-                |> List.indexedMap (\k y -> ( toFloat (n - k), y ))
+                |> List.indexedMap (\k y -> ( 100 * toFloat (n - k), y ))
                 |> List.take 100
                 |> List.reverse
     in
-    SimpleGraph.lineChartWithDataWindow dataWindow wideBarGraphAttributes data |> Element.html
+    SimpleGraph.lineChartWithDataWindow dataWindow2 wideBarGraphAttributes data |> Element.html
 
 
 dataWindow =
@@ -1139,6 +1143,9 @@ controlButtonTitle model =
 
         GameOver ->
             "Play again"
+
+        Phase2 ->
+            "Trading"
 
 
 reheatButton : Model -> Element Msg
