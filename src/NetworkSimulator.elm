@@ -459,7 +459,7 @@ randomUpdate model numbers =
                     ( 1, Network.recruitRandom numbers model.recruiter model.graph )
 
         ( transactionRecord, newGraph ) =
-            case modBy recruitInterval model.gameClock == transactionStep of
+            case modBy recruitInterval model.gameClock == transactionStep && model.gameState == Running of
                 False ->
                     ( Nothing, newGraph1 )
 
@@ -882,23 +882,47 @@ accountChart graph =
 sustainabilityChart : Model -> Element Msg
 sustainabilityChart model =
     let
+        n =
+            List.length model.history
+
         data =
             List.map .sustainability model.history
+                |> List.indexedMap (\k y -> ( toFloat (n - k), y ))
                 |> List.take 100
                 |> List.reverse
     in
-    SimpleGraph.barChart wideBarGraphAttributes data |> Element.html
+    SimpleGraph.lineChartWithDataWindow dataWindow2 wideBarGraphAttributes data |> Element.html
 
 
 giniChart : Model -> Element Msg
 giniChart model =
     let
+        n =
+            List.length model.history
+
         data =
             List.map .gini model.history
+                |> List.indexedMap (\k y -> ( toFloat (n - k), y ))
                 |> List.take 100
                 |> List.reverse
     in
-    SimpleGraph.barChart wideBarGraphAttributes data |> Element.html
+    SimpleGraph.lineChartWithDataWindow dataWindow wideBarGraphAttributes data |> Element.html
+
+
+dataWindow =
+    { xMax = 100.0
+    , xMin = 0.0
+    , yMin = 0.0
+    , yMax = 1.0
+    }
+
+
+dataWindow2 =
+    { xMax = 100.0
+    , xMin = 0.0
+    , yMin = 0.0
+    , yMax = 100.0
+    }
 
 
 barGraphAttributes =
@@ -911,7 +935,7 @@ barGraphAttributes =
 wideBarGraphAttributes =
     { graphHeight = 35
     , graphWidth = 420
-    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 4, SimpleGraph.YTickmarks 6, SimpleGraph.XTickmarks 2 ]
+    , options = [ SimpleGraph.Color "rgb(200,0,0)", SimpleGraph.DeltaX 11, SimpleGraph.YTickmarks 5, SimpleGraph.XTickmarks 2 ]
     }
 
 
