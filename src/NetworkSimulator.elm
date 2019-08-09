@@ -32,6 +32,7 @@ import TypedSvg.Attributes exposing (class, fill, fontSize, stroke, transform, v
 import TypedSvg.Attributes.InPx as Apx exposing (cx, cy, r, strokeWidth, x, x1, x2, y, y1, y2)
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
+import Utility
 
 
 gameTimeInterval =
@@ -44,6 +45,10 @@ recruitInterval =
 
 recruitStep =
     0
+
+
+epsilon =
+    0.000001
 
 
 
@@ -115,11 +120,11 @@ measures model =
         sg =
             Network.simplifyGraph model.graph
     in
-    { sustainability = NM.sustainabilityPercentage sg |> NM.roundTo 2
-    , totalFlow = NM.totalFlow sg |> NM.roundTo 2
-    , resilience = NM.resilience sg |> NM.roundTo 2
-    , efficiency = NM.efficiency sg |> NM.roundTo 2
-    , gini = NM.giniIndex sg |> NM.roundTo 2
+    { sustainability = NM.sustainabilityPercentage sg |> Utility.roundTo 2
+    , totalFlow = NM.totalFlow sg |> Utility.roundTo 2
+    , resilience = NM.resilience sg |> Utility.roundTo 2
+    , efficiency = NM.efficiency sg |> Utility.roundTo 2
+    , gini = NM.giniIndex sg |> Utility.roundTo 2
     }
 
 
@@ -472,7 +477,7 @@ randomUpdate model numbers =
                     ( Nothing, newGraph1 )
 
                 True ->
-                    Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph1
+                    Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) (Network.simpleTransaction 1) newGraph1
 
         ( message, deltaTransactions ) =
             case transactionRecord of
@@ -660,15 +665,14 @@ linkElement graph edge =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
 
         color =
-            case Network.absoluteEdgeFlow edge of
-                0 ->
-                    Color.rgb255 255 255 255
+            if Network.absoluteEdgeFlow edge < epsilon then
+                Color.rgb255 255 255 255
 
-                _ ->
-                    Color.rgb255 0 0 255
+            else
+                Color.rgb255 0 0 255
     in
     line
-        [ strokeWidth (toFloat <| Network.absoluteEdgeFlow edge + 1)
+        [ strokeWidth (Network.absoluteEdgeFlow edge + 1)
         , stroke color
         , x1 source.x
         , y1 source.y
@@ -691,7 +695,7 @@ nodeElement model node =
 
         accBal : Float
         accBal =
-            node.label.value.accountBalance |> toFloat
+            node.label.value.accountBalance
     in
     g []
         [ circle
@@ -709,7 +713,7 @@ nodeElement model node =
             , fontSize (Px 12)
             , stroke (Color.rgba 1 1 1 1)
             ]
-            [ Svg.text (String.fromInt node.label.value.accountBalance) ]
+            [ Svg.text (String.fromFloat (Utility.roundTo 0 node.label.value.accountBalance)) ]
         ]
 
 
@@ -777,9 +781,7 @@ stringFromEdge edge =
         ++ " -> "
         ++ String.fromInt edge.to
         ++ " ("
-        ++ String.fromInt edge.label.unitsSent
-        ++ ", "
-        ++ String.fromInt edge.label.unitsReceived
+        ++ "xxx"
         ++ ")"
 
 
@@ -863,7 +865,7 @@ moneySupplyDisplay model =
         moneySupply =
             Network.moneySupply model.graph
     in
-    el [] (text <| "Money supply = " ++ String.fromInt (Network.moneySupply model.graph))
+    el [] (text <| "Money supply = " ++ String.fromFloat (Network.moneySupply model.graph))
 
 
 numberOfTradersDisplay : Model -> Element Msg
@@ -888,7 +890,7 @@ accountChart graph =
     let
         data =
             Network.accountList graph
-                |> List.map (Tuple.second >> toFloat)
+                |> List.map Tuple.second
                 |> List.reverse
     in
     SimpleGraph.barChart barGraphAttributes data |> Element.html

@@ -5,7 +5,6 @@ module NetworkMeasure exposing
     , giniIndex
     , resilience
     , resilienceOfEdge
-    , roundTo
     , sustainability
     , sustainabilityPercentage
     , totalFlow
@@ -14,6 +13,7 @@ module NetworkMeasure exposing
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
 import Network exposing (EdgeLabel, NodeState, SimpleGraph)
+import Utility
 
 
 
@@ -30,7 +30,7 @@ accountBalances : SimpleGraph -> List Float
 accountBalances g =
     g
         |> Graph.nodes
-        |> List.map (.label >> .accountBalance >> toFloat)
+        |> List.map (.label >> .accountBalance)
 
 
 
@@ -135,14 +135,14 @@ totalFlow : SimpleGraph -> Float
 totalFlow g =
     g
         |> Graph.edges
-        |> List.map (.label >> .unitsSent >> abs >> toFloat)
+        |> List.map Network.absoluteEdgeFlow
         |> List.sum
 
 
 edgeFlow : IntDict EdgeLabel -> Float
 edgeFlow intDict =
     IntDict.values intDict
-        |> List.map (.unitsSent >> abs >> toFloat)
+        |> List.map (Network.netTransactionAmountOfEdgeLabel >> abs)
         |> List.sum
 
 
@@ -150,7 +150,7 @@ efficiencyOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
 efficiencyOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
-            edge.label.unitsSent |> toFloat |> abs
+            Network.absoluteEdgeFlow edge
 
         denominator =
             outflowFromNode edge.from g * inflowToNode edge.to g
@@ -167,14 +167,14 @@ efficiencyOfEdge totalFlow_ g edge =
                 logRatio =
                     logBase 2 (numerator / denominator)
             in
-            roundTo 3 (edgeFlow_ * logRatio)
+            Utility.roundTo 3 (edgeFlow_ * logRatio)
 
 
 resilienceOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
 resilienceOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
-            edge.label.unitsSent |> toFloat |> abs
+            Network.absoluteEdgeFlow edge
 
         denominator =
             outflowFromNode edge.from g * inflowToNode edge.to g
@@ -202,7 +202,7 @@ efficiency g =
     in
     List.map (efficiencyOfEdge totalFlow_ g) (Graph.edges g)
         |> List.sum
-        |> (\x -> roundTo 3 x)
+        |> (\x -> Utility.roundTo 3 x)
 
 
 resilience : SimpleGraph -> Float
@@ -213,7 +213,7 @@ resilience g =
     in
     List.map (resilienceOfEdge totalFlow_ g) (Graph.edges g)
         |> List.sum
-        |> (\x -> -(roundTo 3 x))
+        |> (\x -> -(Utility.roundTo 3 x))
 
 
 alpha : SimpleGraph -> Float
@@ -251,30 +251,4 @@ sustainability g =
 
 sustainabilityPercentage : SimpleGraph -> Float
 sustainabilityPercentage g =
-    roundTo 2 (100 * sustainability g)
-
-
-
-{-
-
-   Auxiliary functions
-
--}
-
-
-roundTo : Int -> Float -> Float
-roundTo places quantity =
-    let
-        factor =
-            10 ^ places
-
-        ff =
-            toFloat factor
-
-        q2 =
-            ff * quantity
-
-        q3 =
-            round q2
-    in
-    toFloat q3 / ff
+    Utility.roundTo 2 (100 * sustainability g)

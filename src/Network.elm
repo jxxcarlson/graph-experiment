@@ -8,7 +8,6 @@ module Network exposing
     , accountList
     , areConnected
     , changeAccountBalance
-    , changeContext
     , changeEdgeLabel
     , changeEdgeLabel1
     , computeForces
@@ -21,7 +20,6 @@ module Network exposing
     , getEdgeLabel
     , hiddenTestGraph
     , inComingNodeIds
-    , incrementOutgoingUnitsSent
     , incrementRecruitedCount
     , influencees
     , influencees2
@@ -30,9 +28,10 @@ module Network exposing
     , integerSequence
     , makeTransaction
     , moneySupply
+    , netTransactionAmountOfEdgeLabel
     , nodeBalance
     , nodeState
-    , nodeState2
+    , nodeStateFromNodge
     , outGoingNodeIds
     , postTransactionToContext
     , postTransactionToNetwork
@@ -46,6 +45,7 @@ module Network exposing
     , setStatus
     , setupGraph
     , showEdgeLabel
+    , simpleTransaction
     , simplifyGraph
     , testGraph
     , updateContextWithValue
@@ -57,6 +57,7 @@ import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
 import List.Extra
 import PseudoRandom
+import Utility
 
 
 
@@ -83,9 +84,20 @@ simplifyGraph g =
 
 
 type alias EdgeLabel =
-    { unitsSent : Int
-    , unitsReceived : Int
+    { transactions : List Transaction
     }
+
+
+type alias Transaction =
+    { amount : Float
+    , time : Int
+    , expiration : Expiration
+    }
+
+
+type Expiration
+    = Infinite
+    | Finite Int
 
 
 type alias Network =
@@ -97,7 +109,15 @@ type alias NetworkEdge =
 
 
 zeroEdgeLabel =
-    { unitsSent = 0, unitsReceived = 0 }
+    { transactions = [] }
+
+
+simpleTransaction : Float -> Transaction
+simpleTransaction amount =
+    { amount = amount
+    , time = 0
+    , expiration = Finite 50
+    }
 
 
 type Status
@@ -112,7 +132,7 @@ type alias GraphId =
 type alias NodeState =
     { name : String
     , status : Status
-    , accountBalance : Int
+    , accountBalance : Float
     , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
@@ -157,7 +177,7 @@ filterNodes filterNode_ graph =
 --
 
 
-accountList : Graph Entity EdgeLabel -> List ( NodeId, Int )
+accountList : Graph Entity EdgeLabel -> List ( NodeId, Float )
 accountList graph =
     graph
         |> Graph.nodes
@@ -174,7 +194,7 @@ activeTraders graph =
     filterNodes nodeFilter graph
 
 
-debitNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+debitNode : NodeId -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 debitNode nodeId_ amount graph =
     Graph.mapNodes
         (\n ->
@@ -196,13 +216,13 @@ debitNode nodeId_ amount graph =
         graph
 
 
-creditNode : NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+creditNode : NodeId -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 creditNode nodeId_ amount graph =
     debitNode nodeId_ -amount graph
 
 
-randomTransaction : Maybe Float -> Maybe Float -> Int -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
-randomTransaction mr1 mr2 amount graph =
+randomTransaction : Maybe Float -> Maybe Float -> Transaction -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
+randomTransaction mr1 mr2 transaction graph =
     let
         traders =
             activeTraders graph
@@ -222,24 +242,29 @@ randomTransaction mr1 mr2 amount graph =
         case ( maybeNodeId1, maybeNodeId2 ) of
             ( Just nodeId1, Just nodeId2 ) ->
                 graph
-                    |> makeTransaction nodeId1 nodeId2 amount
+                    |> makeTransaction nodeId1 nodeId2 transaction
                     |> (\g -> ( Just ( nodeId1, nodeId2 ), g ))
 
             _ ->
                 ( Nothing, graph )
 
 
-makeTransaction : Int -> Int -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-makeTransaction i j amount graph =
+makeTransaction : Int -> Int -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+makeTransaction i j transaction graph =
     graph
         |> connectIf i j
-        |> creditNode j amount
-        |> debitNode i amount
-        |> postTransactionToNetwork i j amount
-        |> postTransactionToNetwork j i -amount
+        |> creditNode j transaction.amount
+        |> debitNode i transaction.amount
+        |> postTransactionToNetwork i j transaction
+        |> postTransactionToNetwork j i (scaleTransaction -1 transaction)
 
 
-nodeBalance : NodeId -> Graph Entity EdgeLabel -> Maybe Int
+scaleTransaction : Float -> Transaction -> Transaction
+scaleTransaction multiplier transaction =
+    { transaction | amount = multiplier * transaction.amount }
+
+
+nodeBalance : NodeId -> Graph Entity EdgeLabel -> Maybe Float
 nodeBalance i g =
     g
         |> Graph.nodes
@@ -257,65 +282,47 @@ showEdgeLabel i j g =
         |> Maybe.map (\e -> e.label)
 
 
-absoluteEdgeFlow : Edge EdgeLabel -> Int
+absoluteEdgeFlow : Edge EdgeLabel -> Float
 absoluteEdgeFlow e =
-    abs e.label.unitsSent
+    abs (netTransactionAmountOfEdge e)
 
 
-postTransactionToNetwork : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-postTransactionToNetwork n1 n2 amount g =
-    Graph.mapContexts (postTransactionToContext n1 n2 amount) g
+netTransactionAmountOfEdge : Edge EdgeLabel -> Float
+netTransactionAmountOfEdge e =
+    netTransactionAmountOfEdgeLabel e.label
 
 
-
---
-
-
-changeContext : NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
-changeContext ctx =
-    { ctx | outgoing = IntDict.insert 1 { zeroEdgeLabel | unitsReceived = 666, unitsSent = 444 } ctx.outgoing }
+netTransactionAmountOfEdgeLabel : EdgeLabel -> Float
+netTransactionAmountOfEdgeLabel label =
+    label.transactions
+        |> List.map .amount
+        |> List.sum
 
 
-incrementOutgoingUnitsSent : NodeId -> NodeId -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
-incrementOutgoingUnitsSent i j ctx =
-    if ctx.node.id /= i then
-        ctx
-
-    else
-        case ( IntDict.get j <| .incoming ctx, IntDict.get j <| .outgoing ctx ) of
-            ( Just edgeLabel, Nothing ) ->
-                ctx
-
-            ( Nothing, Just edgeLabel ) ->
-                let
-                    newOutgoing =
-                        IntDict.insert j { edgeLabel | unitsSent = edgeLabel.unitsSent + 1 } ctx.outgoing
-                in
-                { ctx | outgoing = newOutgoing }
-
-            _ ->
-                ctx
+postTransactionToNetwork : NodeId -> NodeId -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+postTransactionToNetwork n1 n2 transaction g =
+    Graph.mapContexts (postTransactionToContext n1 n2 transaction) g
 
 
-postTransactionToContext : NodeId -> NodeId -> Int -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
-postTransactionToContext n1 n2 amount ctx =
+postTransactionToContext : NodeId -> NodeId -> Transaction -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
+postTransactionToContext n1 n2 transaction ctx =
     if ctx.node.id /= n1 then
         ctx
 
     else
         case ( IntDict.get n2 <| .incoming ctx, IntDict.get n2 <| .outgoing ctx ) of
             ( Just edgeLabel, _ ) ->
-                { ctx | incoming = postTransactionToIncoming n2 amount ctx.incoming }
+                { ctx | incoming = postTransactionToIncoming n2 transaction ctx.incoming }
 
             ( _, Just edgeLabel ) ->
-                { ctx | outgoing = postTransactionToOutGoing n2 amount ctx.outgoing }
+                { ctx | outgoing = postTransactionToOutGoing n2 transaction ctx.outgoing }
 
             _ ->
                 ctx
 
 
-postTransactionToIncoming : NodeId -> Int -> IntDict EdgeLabel -> IntDict EdgeLabel
-postTransactionToIncoming nodeId amount intDict =
+postTransactionToIncoming : NodeId -> Transaction -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToIncoming nodeId transaction intDict =
     case IntDict.get nodeId intDict of
         Nothing ->
             intDict
@@ -323,13 +330,13 @@ postTransactionToIncoming nodeId amount intDict =
         Just edgeLabel ->
             let
                 newEdgeLabel =
-                    { edgeLabel | unitsSent = edgeLabel.unitsReceived - amount }
+                    { edgeLabel | transactions = transaction :: edgeLabel.transactions }
             in
             IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
 
 
-postTransactionToOutGoing : NodeId -> Int -> IntDict EdgeLabel -> IntDict EdgeLabel
-postTransactionToOutGoing nodeId amount intDict =
+postTransactionToOutGoing : NodeId -> Transaction -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToOutGoing nodeId transaction intDict =
     case IntDict.get nodeId intDict of
         Nothing ->
             intDict
@@ -337,18 +344,41 @@ postTransactionToOutGoing nodeId amount intDict =
         Just edgeLabel ->
             let
                 newEdgeLabel =
-                    { edgeLabel | unitsSent = edgeLabel.unitsSent + amount }
+                    { edgeLabel | transactions = transaction :: edgeLabel.transactions }
             in
             IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
 
 
 stringOfEdgeLabel : EdgeLabel -> String
 stringOfEdgeLabel el =
-    "r: " ++ String.fromInt el.unitsReceived ++ ", s: " ++ String.fromInt el.unitsSent
+    el.transactions
+        |> List.map stringFromTransaction
+        |> String.join "; "
 
 
-updateEdgeLabel : NodeId -> NodeId -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-updateEdgeLabel n1 n2 amount g =
+stringFromTransaction : Transaction -> String
+stringFromTransaction tr =
+    "("
+        ++ String.fromFloat (Utility.roundTo 0 tr.amount)
+        ++ ", "
+        ++ String.fromInt tr.time
+        ++ ", "
+        ++ stringFromExpiration tr.expiration
+        ++ ")"
+
+
+stringFromExpiration : Expiration -> String
+stringFromExpiration exp =
+    case exp of
+        Infinite ->
+            "infinite"
+
+        Finite t ->
+            String.fromInt t
+
+
+updateEdgeLabel : NodeId -> NodeId -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+updateEdgeLabel n1 n2 transaction g =
     case getEdgeLabel n1 n2 g of
         Nothing ->
             g
@@ -358,9 +388,7 @@ updateEdgeLabel n1 n2 amount g =
                 -- edgeToChange =
                 --     { from = n1, to = n2, label = edgeLabel }
                 newEdgeLabel =
-                    { unitsSent = edgeLabel.unitsSent + amount
-                    , unitsReceived = edgeLabel.unitsReceived - amount
-                    }
+                    { transactions = transaction :: edgeLabel.transactions }
 
                 changedEdge =
                     { from = n1, to = n2, label = newEdgeLabel }
@@ -434,8 +462,8 @@ getEdgeLabel1 n1 n2 g =
                     Nothing
 
 
-nodeState2 : Node Entity -> NodeState
-nodeState2 node =
+nodeStateFromNodge : Node Entity -> NodeState
+nodeStateFromNodge node =
     node.label.value
 
 
@@ -611,7 +639,7 @@ setStatus nodeIndex status graph =
         graph
 
 
-changeAccountBalance : Int -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+changeAccountBalance : Int -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 changeAccountBalance nodeIndex delta graph =
     Graph.mapNodes
         (\n ->
@@ -971,11 +999,11 @@ alterLink ( from, to ) =
     }
 
 
-moneySupply : Graph Entity EdgeLabel -> Int
+moneySupply : Graph Entity EdgeLabel -> Float
 moneySupply graph =
     graph
         |> Graph.nodes
-        |> List.map (nodeState2 >> .accountBalance)
+        |> List.map (nodeStateFromNodge >> .accountBalance)
         |> List.sum
 
 
