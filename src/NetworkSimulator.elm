@@ -257,133 +257,28 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick t ->
-            let
-                ( newState, list ) =
-                    Force.tick model.simulation <| List.map .label <| Graph.nodes model.graph
-            in
-            case model.drag of
-                Nothing ->
-                    { model | graph = updateGraphWithList model.graph list, simulation = newState } |> putCmd Cmd.none
-
-                Just { current, index } ->
-                    { model | graph = Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) }
-                        |> putCmd Cmd.none
+            handleTick model t
 
         GameTick t ->
-            case model.gameState of
-                Running ->
-                    ( { model | gameClock = model.gameClock + 1 }, getRandomNumbers )
-
-                _ ->
-                    ( model, getRandomNumbers )
+            handleGameTick model t
 
         DragStart index xy ->
             { model | drag = Just (Drag xy xy index) } |> putCmd Cmd.none
 
         MouseClick index xy ->
-            if model.gameState /= Running then
-                ( model, Cmd.none )
-
-            else
-                let
-                    associatedIncomingNodeIds =
-                        Network.inComingNodeIds index model.hiddenGraph
-
-                    associatedOutgoingNodeIds =
-                        Network.outGoingNodeIds index model.hiddenGraph
-
-                    audioMsg =
-                        case List.length associatedOutgoingNodeIds == 0 of
-                            True ->
-                                Chirp
-
-                            False ->
-                                LongChirp
-
-                    newGraph =
-                        Network.setStatus index Recruited model.graph
-                            |> Network.creditNode model.recruiter 1
-                            |> Network.changeAccountBalance index 10
-                            |> Network.connect model.recruiter index
-                            |> Network.incrementRecruitedCount model.recruiter
-                            |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
-
-                    newGrid =
-                        Grid.cellGridFromGraph gridWidth newGraph
-
-                    forces =
-                        Network.computeForces newGraph
-                in
-                { model
-                    | graph = newGraph
-                    , grid = newGrid
-                    , simulation = Force.simulation forces
-                    , clickCount = model.clickCount + 1
-                    , message = "Recruit node " ++ String.fromInt index
-                }
-                    |> putCmd (sendAudioMessage audioMsg)
+            handleMouseClick model index xy
 
         DragAt xy ->
-            case model.drag of
-                Just { start, index } ->
-                    { model
-                        | drag = Just (Drag start xy index)
-                        , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
-                        , simulation = Force.reheat model.simulation
-                    }
-                        |> putCmd Cmd.none
-
-                Nothing ->
-                    model |> putCmd Cmd.none
+            handleDragAt model xy
 
         DragEnd xy ->
-            case model.drag of
-                Just { start, index } ->
-                    { model | drag = Nothing, graph = Graph.update index (Maybe.map (updateNode xy)) model.graph } |> putCmd Cmd.none
-
-                Nothing ->
-                    model |> putCmd Cmd.none
+            handleDragEnd model xy
 
         SetGraphBehavior behavior ->
             { model | graphBehavior = behavior } |> putCmd Cmd.none
 
         AdvanceGameState ->
-            let
-                newGameState =
-                    case model.gameState of
-                        Ready ->
-                            Running
-
-                        Running ->
-                            Paused
-
-                        Paused ->
-                            Running
-
-                        GameOver ->
-                            Ready
-
-                        GameEnding ->
-                            GameOver
-            in
-            case model.gameState of
-                GameOver ->
-                    let
-                        ( forces, graph ) =
-                            Network.setupGraph Network.testGraph
-                    in
-                    { model
-                        | graph = graph
-                        , grid = Grid.cellGridFromGraph gridWidth graph
-                        , simulation = Force.simulation forces
-                        , clickCount = 0
-                        , gameClock = 0
-                        , gameState = newGameState
-                    }
-                        |> putCmd Cmd.none
-
-                _ ->
-                    { model | gameState = newGameState } |> putCmd Cmd.none
+            advanceGameState model
 
         ReHeat ->
             { model | simulation = Force.reheat model.simulation } |> putCmd Cmd.none
@@ -392,110 +287,13 @@ update msg model =
             ( model, getRandomNumbers )
 
         GotRandomNumbers numbers ->
-            let
-                recruitCount1 =
-                    Grid.recruitedCount model.grid
-
-                nextHistory =
-                    if modBy recruitInterval model.gameClock == 1 then
-                        measures model :: model.history
-
-                    else
-                        model.history
-
-                ( deltaRecuiterAccount, newGraph1 ) =
-                    -- New recruitees recruit other nodes at random
-                    case
-                        model.gameState
-                            == Running
-                            && modBy recruitInterval model.gameClock
-                            == recruitStep
-                    of
-                        False ->
-                            ( 0, model.graph )
-
-                        True ->
-                            ( 1, Network.recruitRandom numbers model.recruiter model.graph )
-
-                ( transactionRecord, newGraph ) =
-                    case modBy recruitInterval model.gameClock == transactionStep of
-                        False ->
-                            ( Nothing, newGraph1 )
-
-                        True ->
-                            Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph1
-
-                ( message, deltaTransactions ) =
-                    case transactionRecord of
-                        Nothing ->
-                            ( model.message, 0 )
-
-                        Just ( i, j ) ->
-                            ( "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j, 1 )
-
-                newGrid =
-                    Grid.cellGridFromGraph gridWidth newGraph
-
-                recruitCount2 =
-                    Grid.recruitedCount newGrid
-
-                newGameState =
-                    let
-                        everyoneRecruited =
-                            Grid.recruitedCount model.grid == Graph.size model.graph
-                    in
-                    case ( model.gameState, everyoneRecruited ) of
-                        ( Running, True ) ->
-                            GameEnding
-
-                        ( GameEnding, _ ) ->
-                            GameOver
-
-                        _ ->
-                            model.gameState
-
-                audioMsg =
-                    case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
-                        ( GameEnding, _ ) ->
-                            VeryLongChirp
-
-                        ( Running, True ) ->
-                            Coo
-
-                        _ ->
-                            Silence
-            in
-            ( { model
-                | randomNumberList = numbers
-                , graph = newGraph
-                , grid = newGrid
-                , gameState = newGameState
-                , message = message
-                , history = nextHistory
-                , numberOfTransactionsToDate = model.numberOfTransactionsToDate + deltaTransactions
-              }
-            , sendAudioMessage audioMsg
-            )
+            randomUpdate model numbers
 
         SetDisplayMode displayMode ->
             ( { model | displayMode = displayMode }, Cmd.none )
 
         ResetGame ->
-            let
-                ( forces, graph ) =
-                    Network.setupGraph Network.testGraph
-            in
-            ( { model
-                | gameState = Ready
-                , gameClock = 0
-                , clickCount = 0
-                , history = []
-                , graph = graph
-                , simulation = Force.simulation forces
-                , grid = Grid.cellGridFromGraph gridWidth graph
-              }
-            , Cmd.none
-            )
+            resetGame model
 
         CellGrid msg_ ->
             handleMouseClickInGrid model msg_
@@ -503,6 +301,240 @@ update msg model =
 
 
 -- UPDATE HELPERS --
+
+
+handleTick model t =
+    let
+        ( newState, list ) =
+            Force.tick model.simulation <| List.map .label <| Graph.nodes model.graph
+    in
+    case model.drag of
+        Nothing ->
+            { model | graph = updateGraphWithList model.graph list, simulation = newState } |> putCmd Cmd.none
+
+        Just { current, index } ->
+            { model | graph = Graph.update index (Maybe.map (updateNode current)) (updateGraphWithList model.graph list) }
+                |> putCmd Cmd.none
+
+
+handleGameTick model t =
+    case model.gameState of
+        Running ->
+            ( { model | gameClock = model.gameClock + 1 }, getRandomNumbers )
+
+        _ ->
+            ( model, getRandomNumbers )
+
+
+handleMouseClick model index xy =
+    if model.gameState /= Running then
+        ( model, Cmd.none )
+
+    else
+        let
+            associatedIncomingNodeIds =
+                Network.inComingNodeIds index model.hiddenGraph
+
+            associatedOutgoingNodeIds =
+                Network.outGoingNodeIds index model.hiddenGraph
+
+            audioMsg =
+                case List.length associatedOutgoingNodeIds == 0 of
+                    True ->
+                        Chirp
+
+                    False ->
+                        LongChirp
+
+            newGraph =
+                Network.setStatus index Recruited model.graph
+                    |> Network.creditNode model.recruiter 1
+                    |> Network.changeAccountBalance index 10
+                    |> Network.connect model.recruiter index
+                    |> Network.incrementRecruitedCount model.recruiter
+                    |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+
+            newGrid =
+                Grid.cellGridFromGraph gridWidth newGraph
+
+            forces =
+                Network.computeForces newGraph
+        in
+        { model
+            | graph = newGraph
+            , grid = newGrid
+            , simulation = Force.simulation forces
+            , clickCount = model.clickCount + 1
+            , message = "Recruit node " ++ String.fromInt index
+        }
+            |> putCmd (sendAudioMessage audioMsg)
+
+
+handleDragAt model xy =
+    case model.drag of
+        Just { start, index } ->
+            { model
+                | drag = Just (Drag start xy index)
+                , graph = Graph.update index (Maybe.map (updateNode xy)) model.graph
+                , simulation = Force.reheat model.simulation
+            }
+                |> putCmd Cmd.none
+
+        Nothing ->
+            model |> putCmd Cmd.none
+
+
+handleDragEnd model xy =
+    case model.drag of
+        Just { start, index } ->
+            { model | drag = Nothing, graph = Graph.update index (Maybe.map (updateNode xy)) model.graph } |> putCmd Cmd.none
+
+        Nothing ->
+            model |> putCmd Cmd.none
+
+
+advanceGameState model =
+    let
+        newGameState =
+            case model.gameState of
+                Ready ->
+                    Running
+
+                Running ->
+                    Paused
+
+                Paused ->
+                    Running
+
+                GameOver ->
+                    Ready
+
+                GameEnding ->
+                    GameOver
+    in
+    case model.gameState of
+        GameOver ->
+            let
+                ( forces, graph ) =
+                    Network.setupGraph Network.testGraph
+            in
+            { model
+                | graph = graph
+                , grid = Grid.cellGridFromGraph gridWidth graph
+                , simulation = Force.simulation forces
+                , clickCount = 0
+                , gameClock = 0
+                , gameState = newGameState
+            }
+                |> putCmd Cmd.none
+
+        _ ->
+            { model | gameState = newGameState } |> putCmd Cmd.none
+
+
+randomUpdate model numbers =
+    let
+        recruitCount1 =
+            Grid.recruitedCount model.grid
+
+        nextHistory =
+            if modBy recruitInterval model.gameClock == 1 then
+                measures model :: model.history
+
+            else
+                model.history
+
+        ( deltaRecuiterAccount, newGraph1 ) =
+            -- New recruitees recruit other nodes at random
+            case
+                model.gameState
+                    == Running
+                    && modBy recruitInterval model.gameClock
+                    == recruitStep
+            of
+                False ->
+                    ( 0, model.graph )
+
+                True ->
+                    ( 1, Network.recruitRandom numbers model.recruiter model.graph )
+
+        ( transactionRecord, newGraph ) =
+            case modBy recruitInterval model.gameClock == transactionStep of
+                False ->
+                    ( Nothing, newGraph1 )
+
+                True ->
+                    Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) 1 newGraph1
+
+        ( message, deltaTransactions ) =
+            case transactionRecord of
+                Nothing ->
+                    ( model.message, 0 )
+
+                Just ( i, j ) ->
+                    ( "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j, 1 )
+
+        newGrid =
+            Grid.cellGridFromGraph gridWidth newGraph
+
+        recruitCount2 =
+            Grid.recruitedCount newGrid
+
+        newGameState =
+            let
+                everyoneRecruited =
+                    Grid.recruitedCount model.grid == Graph.size model.graph
+            in
+            case ( model.gameState, everyoneRecruited ) of
+                ( Running, True ) ->
+                    GameEnding
+
+                ( GameEnding, _ ) ->
+                    GameOver
+
+                _ ->
+                    model.gameState
+
+        audioMsg =
+            case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
+                ( GameEnding, _ ) ->
+                    VeryLongChirp
+
+                ( Running, True ) ->
+                    Coo
+
+                _ ->
+                    Silence
+    in
+    ( { model
+        | randomNumberList = numbers
+        , graph = newGraph
+        , grid = newGrid
+        , gameState = newGameState
+        , message = message
+        , history = nextHistory
+        , numberOfTransactionsToDate = model.numberOfTransactionsToDate + deltaTransactions
+      }
+    , sendAudioMessage audioMsg
+    )
+
+
+resetGame model =
+    let
+        ( forces, graph ) =
+            Network.setupGraph Network.testGraph
+    in
+    ( { model
+        | gameState = Ready
+        , gameClock = 0
+        , clickCount = 0
+        , history = []
+        , graph = graph
+        , simulation = Force.simulation forces
+        , grid = Grid.cellGridFromGraph gridWidth graph
+      }
+    , Cmd.none
+    )
 
 
 handleMouseClickInGrid model msg_ =
