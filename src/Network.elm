@@ -7,6 +7,8 @@ module Network exposing
     , absoluteEdgeFlow
     , accountList
     , areConnected
+    , balanceFromNode
+    , balanceFromNodeState
     , changeAccountBalance
     , changeEdgeLabel
     , changeEdgeLabel1
@@ -27,11 +29,12 @@ module Network exposing
     , initializeNode
     , integerSequence
     , makeTransaction
+    , mintCurrency
     , moneySupply
     , netTransactionAmountOfEdgeLabel
     , nodeBalance
     , nodeState
-    , nodeStateFromNodge
+    , nodeStateFromNode
     , outGoingNodeIds
     , postTransactionToContext
     , postTransactionToNetwork
@@ -45,13 +48,13 @@ module Network exposing
     , setStatus
     , setupGraph
     , showEdgeLabel
-    , simpleTransaction
     , simplifyGraph
     , testGraph
     , updateContextWithValue
     , zeroEdgeLabel
     )
 
+import Currency exposing (Currency, Expiration)
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
@@ -84,20 +87,8 @@ simplifyGraph g =
 
 
 type alias EdgeLabel =
-    { transactions : List Transaction
+    { transactions : List Currency
     }
-
-
-type alias Transaction =
-    { amount : Float
-    , time : Int
-    , expiration : Expiration
-    }
-
-
-type Expiration
-    = Infinite
-    | Finite Int
 
 
 type alias Network =
@@ -112,8 +103,8 @@ zeroEdgeLabel =
     { transactions = [] }
 
 
-simpleTransaction : Float -> Transaction
-simpleTransaction amount =
+mintCurrency : Float -> Currency
+mintCurrency amount =
     { amount = amount
     , time = 0
     , expiration = Finite 50
@@ -132,7 +123,7 @@ type alias GraphId =
 type alias NodeState =
     { name : String
     , status : Status
-    , accountBalance : Float
+    , accountBalance : List Currency
     , parentGraphId : GraphId
     , numberRecruited : Int
     , location : ( Int, Int )
@@ -181,7 +172,7 @@ accountList : Graph Entity EdgeLabel -> List ( NodeId, Float )
 accountList graph =
     graph
         |> Graph.nodes
-        |> List.map (\n -> ( n.id, n.label.value.accountBalance ))
+        |> List.map (\n -> ( n.id, balanceFromNodeState n.label.value ))
 
 
 activeTraders : Graph Entity EdgeLabel -> List (Node Entity)
@@ -189,12 +180,12 @@ activeTraders graph =
     let
         nodeFilter : Entity -> Bool
         nodeFilter entity =
-            (nodeState entity).accountBalance > 0
+            balanceFromNodeState (nodeState entity) > 0
     in
     filterNodes nodeFilter graph
 
 
-debitNode : NodeId -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+debitNode : NodeId -> Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 debitNode nodeId_ amount graph =
     Graph.mapNodes
         (\n ->
@@ -203,7 +194,7 @@ debitNode nodeId_ amount graph =
                     | value =
                         { name = n.value.name
                         , status = n.value.status
-                        , accountBalance = n.value.accountBalance - amount
+                        , accountBalance = scaleTransaction -1 amount :: n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
@@ -216,13 +207,30 @@ debitNode nodeId_ amount graph =
         graph
 
 
-creditNode : NodeId -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+creditNode : NodeId -> Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 creditNode nodeId_ amount graph =
-    debitNode nodeId_ -amount graph
+    Graph.mapNodes
+        (\n ->
+            if n.id == nodeId_ then
+                { n
+                    | value =
+                        { name = n.value.name
+                        , status = n.value.status
+                        , accountBalance = amount :: n.value.accountBalance
+                        , parentGraphId = n.value.parentGraphId
+                        , numberRecruited = n.value.numberRecruited
+                        , location = n.value.location
+                        }
+                }
+
+            else
+                n
+        )
+        graph
 
 
-randomTransaction : Maybe Float -> Maybe Float -> Transaction -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
-randomTransaction mr1 mr2 transaction graph =
+randomTransaction : Maybe Float -> Maybe Float -> Float -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
+randomTransaction mr1 mr2 amount graph =
     let
         traders =
             activeTraders graph
@@ -242,24 +250,24 @@ randomTransaction mr1 mr2 transaction graph =
         case ( maybeNodeId1, maybeNodeId2 ) of
             ( Just nodeId1, Just nodeId2 ) ->
                 graph
-                    |> makeTransaction nodeId1 nodeId2 transaction
+                    |> makeTransaction nodeId1 nodeId2 amount
                     |> (\g -> ( Just ( nodeId1, nodeId2 ), g ))
 
             _ ->
                 ( Nothing, graph )
 
 
-makeTransaction : Int -> Int -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-makeTransaction i j transaction graph =
+makeTransaction : Int -> Int -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+makeTransaction i j amount graph =
     graph
         |> connectIf i j
-        |> creditNode j transaction.amount
-        |> debitNode i transaction.amount
-        |> postTransactionToNetwork i j transaction
-        |> postTransactionToNetwork j i (scaleTransaction -1 transaction)
+        |> creditNode j amount
+        |> debitNode i amount
+        |> postTransactionToNetwork i j amount
+        |> postTransactionToNetwork j i (scaleTransaction -1 amount)
 
 
-scaleTransaction : Float -> Transaction -> Transaction
+scaleTransaction : Float -> Currency -> Currency
 scaleTransaction multiplier transaction =
     { transaction | amount = multiplier * transaction.amount }
 
@@ -270,7 +278,24 @@ nodeBalance i g =
         |> Graph.nodes
         |> List.filter (\node -> node.id == i)
         |> List.head
-        |> Maybe.map (\n -> n.label.value.accountBalance)
+        |> Maybe.map (\n -> balanceFromNodeState n.label.value)
+
+
+balanceFromNodeState : NodeState -> Float
+balanceFromNodeState ns =
+    ns.accountBalance
+        |> List.map .amount
+        |> List.sum
+
+
+balanceFromSimpleNode : Node NodeState -> Float
+balanceFromSimpleNode node =
+    balanceFromNodeState node.label
+
+
+balanceFromNode : Node Entity -> Float
+balanceFromNode node =
+    balanceFromNodeState node.label.value
 
 
 showEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
@@ -299,12 +324,12 @@ netTransactionAmountOfEdgeLabel label =
         |> List.sum
 
 
-postTransactionToNetwork : NodeId -> NodeId -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+postTransactionToNetwork : NodeId -> NodeId -> Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 postTransactionToNetwork n1 n2 transaction g =
     Graph.mapContexts (postTransactionToContext n1 n2 transaction) g
 
 
-postTransactionToContext : NodeId -> NodeId -> Transaction -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
+postTransactionToContext : NodeId -> NodeId -> Currency -> NodeContext Entity EdgeLabel -> NodeContext Entity EdgeLabel
 postTransactionToContext n1 n2 transaction ctx =
     if ctx.node.id /= n1 then
         ctx
@@ -321,7 +346,7 @@ postTransactionToContext n1 n2 transaction ctx =
                 ctx
 
 
-postTransactionToIncoming : NodeId -> Transaction -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToIncoming : NodeId -> Currency -> IntDict EdgeLabel -> IntDict EdgeLabel
 postTransactionToIncoming nodeId transaction intDict =
     case IntDict.get nodeId intDict of
         Nothing ->
@@ -335,7 +360,7 @@ postTransactionToIncoming nodeId transaction intDict =
             IntDict.update nodeId (Maybe.map (\edgeLabel_ -> newEdgeLabel)) intDict
 
 
-postTransactionToOutGoing : NodeId -> Transaction -> IntDict EdgeLabel -> IntDict EdgeLabel
+postTransactionToOutGoing : NodeId -> Currency -> IntDict EdgeLabel -> IntDict EdgeLabel
 postTransactionToOutGoing nodeId transaction intDict =
     case IntDict.get nodeId intDict of
         Nothing ->
@@ -356,7 +381,7 @@ stringOfEdgeLabel el =
         |> String.join "; "
 
 
-stringFromTransaction : Transaction -> String
+stringFromTransaction : Currency -> String
 stringFromTransaction tr =
     "("
         ++ String.fromFloat (Utility.roundTo 0 tr.amount)
@@ -377,7 +402,7 @@ stringFromExpiration exp =
             String.fromInt t
 
 
-updateEdgeLabel : NodeId -> NodeId -> Transaction -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+updateEdgeLabel : NodeId -> NodeId -> Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 updateEdgeLabel n1 n2 transaction g =
     case getEdgeLabel n1 n2 g of
         Nothing ->
@@ -462,8 +487,8 @@ getEdgeLabel1 n1 n2 g =
                     Nothing
 
 
-nodeStateFromNodge : Node Entity -> NodeState
-nodeStateFromNodge node =
+nodeStateFromNode : Node Entity -> NodeState
+nodeStateFromNode node =
     node.label.value
 
 
@@ -498,12 +523,12 @@ randomPairs modulus n seed =
 
 unrecruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
 unrecruitedNodeState graphId name ( i, j ) =
-    { name = name, accountBalance = 0, parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
+    { name = name, accountBalance = [], parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
 
 
 recruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
 recruitedNodeState graphId name ( i, j ) =
-    { name = name, accountBalance = 0, parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
+    { name = name, accountBalance = [], parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
 
 
 makeEdge : ( NodeId, NodeId ) -> Edge EdgeLabel
@@ -639,7 +664,7 @@ setStatus nodeIndex status graph =
         graph
 
 
-changeAccountBalance : Int -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+changeAccountBalance : Int -> Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 changeAccountBalance nodeIndex delta graph =
     Graph.mapNodes
         (\n ->
@@ -648,7 +673,7 @@ changeAccountBalance nodeIndex delta graph =
                     | value =
                         { name = n.value.name
                         , status = n.value.status
-                        , accountBalance = n.value.accountBalance + delta
+                        , accountBalance = delta :: n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
@@ -951,7 +976,7 @@ recruitRandom numbers designatedRecruiter graph =
         ( Just recruiterNodeId, Just recruiteeNodeId ) ->
             connect recruiterNodeId recruiteeNodeId graph
                 |> setStatus recruiteeNodeId Recruited
-                |> changeAccountBalance recruiteeNodeId 10
+                |> changeAccountBalance recruiteeNodeId (mintCurrency 10)
                 |> incrementRecruitedCount recruiterNodeId
 
         _ ->
@@ -1003,7 +1028,7 @@ moneySupply : Graph Entity EdgeLabel -> Float
 moneySupply graph =
     graph
         |> Graph.nodes
-        |> List.map (nodeStateFromNodge >> .accountBalance)
+        |> List.map balanceFromNode
         |> List.sum
 
 

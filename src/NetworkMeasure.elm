@@ -30,7 +30,7 @@ accountBalances : SimpleGraph -> List Float
 accountBalances g =
     g
         |> Graph.nodes
-        |> List.map (.label >> .accountBalance)
+        |> List.map (.label >> Network.balanceFromNodeState)
 
 
 
