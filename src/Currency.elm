@@ -1,8 +1,10 @@
 module Currency exposing
-    ( Bank
+    ( Account
+    , Bank
     , BankTime
     , Currency
     , Expiration(..)
+    , Transaction
     , create
     , credit
     , creditMany

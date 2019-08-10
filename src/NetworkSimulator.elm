@@ -8,7 +8,7 @@ import Browser
 import Browser.Events
 import CellGrid exposing (CellGrid, CellRenderer)
 import Color
-import Currency exposing (Bank, Expiration(..))
+import Currency exposing (Bank, Expiration(..), Transaction)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -275,11 +275,11 @@ update msg model =
         GameTick t ->
             handleGameTick model t
 
-        DragStart index xy ->
-            { model | drag = Just (Drag xy xy index) } |> putCmd Cmd.none
+        DragStart nodeId xy ->
+            { model | drag = Just (Drag xy xy nodeId) } |> putCmd Cmd.none
 
-        MouseClick index xy ->
-            handleMouseClick model index xy
+        MouseClick nodeId xy ->
+            handleMouseClick model nodeId xy
 
         DragAt xy ->
             handleDragAt model xy
@@ -348,20 +348,18 @@ handleGameTick model t =
             ( model, getRandomNumbers )
 
 
-handleMouseClick model index xy =
+handleMouseClick model nodeId xy =
     if model.gameState /= Phase1 then
         ( model, Cmd.none )
 
     else
         let
-            associatedIncomingNodeIds =
-                Network.inComingNodeIds index model.hiddenGraph
-
-            associatedOutgoingNodeIds =
-                Network.outGoingNodeIds index model.hiddenGraph
+            outgoingNodeIds : List NodeId
+            outgoingNodeIds =
+                Network.outGoingNodeIds nodeId model.hiddenGraph
 
             audioMsg =
-                case List.length associatedOutgoingNodeIds == 0 of
+                case List.length outgoingNodeIds == 0 of
                     True ->
                         Chirp
 
@@ -375,12 +373,12 @@ handleMouseClick model index xy =
                 Currency.debit model.gameClock 10 bankBalance1
 
             newGraph =
-                Network.setStatus index Recruited model.graph
+                Network.setStatus nodeId Recruited model.graph
                     |> Network.creditNode model.gameClock model.recruiter moneyForRecuiter
-                    |> Network.changeAccountBalance model.gameClock index moneyForRecruitee
-                    |> Network.connect model.recruiter index
+                    |> Network.changeAccountBalance model.gameClock nodeId moneyForRecruitee
+                    |> Network.connect model.recruiter nodeId
                     |> Network.incrementRecruitedCount model.recruiter
-                    |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
+                    |> Network.connectNodeToNodeInList model.recruiter outgoingNodeIds
 
             newGrid =
                 Grid.cellGridFromGraph gridWidth newGraph
@@ -397,9 +395,23 @@ handleMouseClick model index xy =
             , simulation = Force.simulation forces
             , centralBank = { centralBank | balance = bankBalance2 }
             , clickCount = model.clickCount + 1
-            , message = "Recruit node " ++ String.fromInt index
+            , message = "Recruit node " ++ String.fromInt nodeId
         }
             |> putCmd (sendAudioMessage audioMsg)
+
+
+recruitNode : NodeId -> List NodeId -> ( Transaction, Transaction ) -> Model -> Graph Entity EdgeLabel
+recruitNode nodeId outgoingNodeIds ( moneyForRecuiter, moneyForRecruitee ) model =
+    Network.setStatus nodeId Recruited model.graph
+        |> Network.creditNode model.gameClock model.recruiter moneyForRecuiter
+        |> Network.changeAccountBalance model.gameClock nodeId moneyForRecruitee
+        |> Network.connect model.recruiter nodeId
+        |> Network.incrementRecruitedCount model.recruiter
+        |> Network.connectNodeToNodeInList model.recruiter
+
+
+
+-- /handleMouseClick --
 
 
 handleDragAt model xy =
@@ -649,8 +661,8 @@ simulationSubscription model =
 
 
 onMouseDown : NodeId -> Attribute Msg
-onMouseDown index =
-    Mouse.onDown (.clientPos >> DragStart index)
+onMouseDown nodeId =
+    Mouse.onDown (.clientPos >> DragStart nodeId)
 
 
 
@@ -658,8 +670,8 @@ onMouseDown index =
 
 
 onMouseClick : NodeId -> Attribute Msg
-onMouseClick index =
-    Mouse.onClick (.clientPos >> MouseClick index)
+onMouseClick nodeId =
+    Mouse.onClick (.clientPos >> MouseClick nodeId)
 
 
 
