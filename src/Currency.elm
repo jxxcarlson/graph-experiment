@@ -1,4 +1,15 @@
-module Currency exposing (Bank, BankTime, Currency, Expiration(..), create, credit, creditMany, debit, debitMany)
+module Currency exposing
+    ( Bank
+    , BankTime
+    , Currency
+    , Expiration(..)
+    , create
+    , credit
+    , creditMany
+    , debit
+    , debitMany
+    , removeInvalid
+    )
 
 import List.Extra
 
@@ -8,6 +19,14 @@ type alias Currency =
     , time : Int
     , expiration : Expiration
     }
+
+
+type alias Account =
+    List Currency
+
+
+type alias Transaction =
+    List Currency
 
 
 type alias Bank =
@@ -62,7 +81,7 @@ create expiration creationTime amount bank =
           : ( List Currency, List Currency )
 
 -}
-debit : BankTime -> Float -> List Currency -> ( List Currency, List Currency )
+debit : BankTime -> Float -> Account -> ( Transaction, Account )
 debit t amount account_ =
     let
         sortedAccount_ =
@@ -92,6 +111,11 @@ isValid t c =
             expirationTime > t
 
 
+removeInvalid : BankTime -> List Currency -> List Currency
+removeInvalid t currencyList =
+    List.filter (isValid t) currencyList
+
+
 {-|
 
       > credit c1 acct
@@ -119,7 +143,7 @@ credit t c account__ =
             c :: account_
 
 
-creditMany : BankTime -> List Currency -> List Currency -> List Currency
+creditMany : BankTime -> Transaction -> Account -> Account
 creditMany t incoming account_ =
     List.foldl (\c acct -> credit t c acct) account_ incoming
 
@@ -128,12 +152,12 @@ creditMany t incoming account_ =
 -- debit : BankTime -> Float -> List Currency -> ( List Currency, List Currency )
 
 
-debitMany : BankTime -> List Currency -> List Currency -> List Currency
+debitMany : BankTime -> Transaction -> Account -> Account
 debitMany t incoming account_ =
     List.foldl (\c acct -> debit t c.amount acct |> Tuple.second) account_ incoming
 
 
-debitFolder : Currency -> ( Float, ( List Currency, List Currency ) ) -> ( Float, ( List Currency, List Currency ) )
+debitFolder : Currency -> ( Float, ( Transaction, Account ) ) -> ( Float, ( Transaction, Account ) )
 debitFolder c ( amtRemaining, ( withDrawal, account ) ) =
     let
         amountToWithdraw =
