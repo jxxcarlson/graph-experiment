@@ -1,4 +1,4 @@
-module Currency exposing (Currency, Expiration(..), acct, c1, c2, c3, credit, debit, debitFolder, m1, m2)
+module Currency exposing (Currency, Expiration(..), credit, debit)
 
 import List.Extra
 
@@ -15,39 +15,63 @@ type Expiration
     | Finite Int
 
 
-c1 =
-    { amount = 1, time = 0, expiration = Infinite }
+epsilon =
+    0.000001
 
 
-c2 =
-    { amount = 1, time = 5, expiration = Infinite }
+{-|
 
+      > import TestCurrency exposing(..)
+      > import Currency exposing(..)
 
-c3 =
-    { amount = 1, time = 88, expiration = Infinite }
+      > debit 1 acct
+      ([{ amount = 1, expiration = Infinite, time = 0 }],[{ amount = 10, expiration = Infinite, time = 5 },{ amount = 9, expiration = Infinite, time = 0 }])
+          : ( List Currency, List Currency )
+      > debit 10 acct
+      ([{ amount = 10, expiration = Infinite, time = 0 }],[{ amount = 10, expiration = Infinite, time = 5 }])
+          : ( List Currency, List Currency )
+      > debit 11 acct
+      ([{ amount = 1, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[{ amount = 9, expiration = Infinite, time = 5 }])
+          : ( List Currency, List Currency )
+      > debit 20 acct
+      ([{ amount = 10, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[])
+          : ( List Currency, List Currency )
+      > debit 21 acct
+      ([{ amount = 10, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[])
+          : ( List Currency, List Currency )
 
-
-m1 =
-    { amount = 10, time = 0, expiration = Infinite }
-
-
-m2 =
-    { amount = 10, time = 5, expiration = Infinite }
-
-
-acct =
-    [ m1, m2 ]
-
-
+-}
 debit : Float -> List Currency -> ( List Currency, List Currency )
 debit amount account_ =
     let
         sortedAccount_ =
             List.sortBy (\c -> c.time) account_
+
+        ( withDrawals, account2 ) =
+            List.foldl debitFolder ( amount, ( [], [] ) ) account_ |> Tuple.second
+
+        withDrawals2 =
+            List.filter (\e -> abs e.amount > epsilon) withDrawals
+
+        account3 =
+            List.filter (\e -> abs e.amount > epsilon) account2
     in
-    List.foldl debitFolder ( amount, ( [], [] ) ) account_ |> Tuple.second
+    ( withDrawals2, account3 )
 
 
+{-|
+
+      > credit c1 acct
+      [{ amount = 11, expiration = Infinite, time = 0 },{ amount = 10, expiration = Infinite, time = 5 }]
+          : List Currency
+      > credit c2 acct
+      [{ amount = 10, expiration = Infinite, time = 0 },{ amount = 11, expiration = Infinite, time = 5 }]
+          : List Currency
+      > credit c3 acct
+      [{ amount = 1, expiration = Infinite, time = 88 },{ amount = 10, expiration = Infinite, time = 0 },{ amount = 10, expiration = Infinite, time = 5 }]
+          : List Currency
+
+-}
 credit : Currency -> List Currency -> List Currency
 credit c account_ =
     case List.filter (\e -> e.time == c.time) account_ of
