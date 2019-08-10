@@ -359,26 +359,13 @@ handleMouseClick model nodeId xy =
                 Network.outGoingNodeIds nodeId model.hiddenGraph
 
             audioMsg =
-                case List.length outgoingNodeIds == 0 of
-                    True ->
-                        Chirp
+                audioMsg_ outgoingNodeIds
 
-                    False ->
-                        LongChirp
-
-            ( moneyForRecuiter, bankBalance1 ) =
-                Currency.debit model.gameClock 1 model.centralBank.balance
-
-            ( moneyForRecruitee, bankBalance2 ) =
-                Currency.debit model.gameClock 10 bankBalance1
+            ( ( moneyForRecuiter, moneyForRecruitee ), newBankBalance ) =
+                moneyForRecuiting_ model
 
             newGraph =
-                Network.setStatus nodeId Recruited model.graph
-                    |> Network.creditNode model.gameClock model.recruiter moneyForRecuiter
-                    |> Network.changeAccountBalance model.gameClock nodeId moneyForRecruitee
-                    |> Network.connect model.recruiter nodeId
-                    |> Network.incrementRecruitedCount model.recruiter
-                    |> Network.connectNodeToNodeInList model.recruiter outgoingNodeIds
+                recruitNode nodeId outgoingNodeIds ( moneyForRecuiter, moneyForRecruitee ) model
 
             newGrid =
                 Grid.cellGridFromGraph gridWidth newGraph
@@ -393,7 +380,7 @@ handleMouseClick model nodeId xy =
             | graph = newGraph
             , grid = newGrid
             , simulation = Force.simulation forces
-            , centralBank = { centralBank | balance = bankBalance2 }
+            , centralBank = { centralBank | balance = newBankBalance }
             , clickCount = model.clickCount + 1
             , message = "Recruit node " ++ String.fromInt nodeId
         }
@@ -407,7 +394,27 @@ recruitNode nodeId outgoingNodeIds ( moneyForRecuiter, moneyForRecruitee ) model
         |> Network.changeAccountBalance model.gameClock nodeId moneyForRecruitee
         |> Network.connect model.recruiter nodeId
         |> Network.incrementRecruitedCount model.recruiter
-        |> Network.connectNodeToNodeInList model.recruiter
+        |> Network.connectNodeToNodeInList model.recruiter outgoingNodeIds
+
+
+audioMsg_ outgoingNodeIds =
+    case List.length outgoingNodeIds == 0 of
+        True ->
+            Chirp
+
+        False ->
+            LongChirp
+
+
+moneyForRecuiting_ model =
+    let
+        ( moneyForRecuiter, bankBalance1 ) =
+            Currency.debit model.gameClock 1 model.centralBank.balance
+
+        ( moneyForRecruitee, bankBalance2 ) =
+            Currency.debit model.gameClock 10 bankBalance1
+    in
+    ( ( moneyForRecuiter, moneyForRecruitee ), bankBalance2 )
 
 
 
