@@ -118,6 +118,11 @@ type Status
     | NotRecruited
 
 
+type Role
+    = Shopkeeper
+    | Unemployed
+
+
 type alias GraphId =
     Int
 
