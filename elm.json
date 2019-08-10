@@ -1,9 +1,9 @@
 {
     "type": "application",
     "source-directories": [
-        "src", "myTests"
+        "src"
     ],
-    "elm-version": "0.19.1",
+    "elm-version": "0.19.0",
     "dependencies": {
         "direct": {
             "avh4/elm-color": "1.0.0",
@@ -45,7 +45,9 @@
         }
     },
     "test-dependencies": {
-        "direct": {},
+        "direct": {
+            "elm-explorations/test": "1.2.2"
+        },
         "indirect": {}
     }
 }

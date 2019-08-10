@@ -15,6 +15,10 @@ type Expiration
     | Finite Int
 
 
+type alias TimeUnit =
+    Int
+
+
 epsilon =
     0.000001
 
@@ -41,11 +45,13 @@ epsilon =
           : ( List Currency, List Currency )
 
 -}
-debit : Float -> List Currency -> ( List Currency, List Currency )
-debit amount account_ =
+debit : TimeUnit -> Float -> List Currency -> ( List Currency, List Currency )
+debit t amount account_ =
     let
         sortedAccount_ =
-            List.sortBy (\c -> c.time) account_
+            account_
+                |> List.filter (isValid t)
+                |> List.sortBy (\c -> c.time)
 
         ( withDrawals, account2 ) =
             List.foldl debitFolder ( amount, ( [], [] ) ) account_ |> Tuple.second
@@ -57,6 +63,16 @@ debit amount account_ =
             List.filter (\e -> abs e.amount > epsilon) account2
     in
     ( withDrawals2, account3 )
+
+
+isValid : TimeUnit -> Currency -> Bool
+isValid t c =
+    case c.expiration of
+        Infinite ->
+            True
+
+        Finite expirationTime ->
+            expirationTime > t
 
 
 {-|
@@ -72,8 +88,12 @@ debit amount account_ =
           : List Currency
 
 -}
-credit : Currency -> List Currency -> List Currency
-credit c account_ =
+credit : TimeUnit -> Currency -> List Currency -> List Currency
+credit t c account__ =
+    let
+        account_ =
+            List.filter (isValid t) account__
+    in
     case List.filter (\e -> e.time == c.time) account_ of
         [ e ] ->
             List.Extra.updateIf (\ee -> ee.time == c.time) (\ee -> { ee | amount = ee.amount + c.amount }) account_
