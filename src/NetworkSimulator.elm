@@ -889,7 +889,8 @@ controlPanel model =
         -- , row [spacing 12] [ enableSelectionButton model, enableDragginButton model]
         , row [ spacing 18 ]
             [ startOverButton model
-            , resetButton model
+
+            --, resetButton model
             ]
         , accountDisplay model
         , row [] [ el [] (text <| "Number of transactions: " ++ String.fromInt model.numberOfTransactionsToDate) ]
