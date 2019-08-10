@@ -487,37 +487,20 @@ advanceGameState model =
             { model | gameState = newGameState } |> putCmd Cmd.none
 
 
+
+-- randomUpdate --
+
+
 randomUpdate model numbers =
     let
         recruitCount1 =
             Grid.recruitedCount model.grid
 
-        ( deltaRecuiterAccount, newGraph1 ) =
-            -- New recruitees recruit other nodes at random
-            case
-                model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep
-            of
-                False ->
-                    ( 0, model.graph )
-
-                True ->
-                    ( 1, Network.recruitRandom numbers model.recruiter model.graph )
-
-        ( transactionRecord, newGraph ) =
-            case model.gameState == Phase2 of
-                False ->
-                    ( Nothing, newGraph1 )
-
-                True ->
-                    Network.randomTransaction model.gameClock (List.head numbers) (List.head (List.drop 1 numbers)) 1.0 newGraph1
+        ( ( deltaRecuiterAccount, transactionRecord ), newGraph ) =
+            recruiteNodesEtc model numbers
 
         ( message, deltaTransactions ) =
-            case transactionRecord of
-                Nothing ->
-                    ( model.message, 0 )
-
-                Just ( i, j ) ->
-                    ( "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j, 1 )
+            messages_ model transactionRecord
 
         newGrid =
             Grid.cellGridFromGraph gridWidth newGraph
@@ -526,37 +509,13 @@ randomUpdate model numbers =
             Grid.recruitedCount newGrid
 
         newGameState =
-            let
-                everyoneRecruited =
-                    Grid.recruitedCount model.grid == Graph.size model.graph
-            in
-            case ( model.gameState, everyoneRecruited ) of
-                ( Phase1, True ) ->
-                    Phase2
-
-                ( GameEnding, _ ) ->
-                    GameOver
-
-                _ ->
-                    model.gameState
+            newGameState_ model
 
         nextHistory =
-            if model.gameState == Phase2 || (model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep) then
-                measures model :: model.history
-
-            else
-                model.history
+            nextHistory_ model
 
         audioMsg =
-            case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
-                ( GameEnding, _ ) ->
-                    VeryLongChirp
-
-                ( Phase1, True ) ->
-                    Coo
-
-                _ ->
-                    Silence
+            audioMsg_2 newGameState recruitCount2 recruitCount1
     in
     ( { model
         | randomNumberList = numbers
@@ -569,6 +528,87 @@ randomUpdate model numbers =
       }
     , sendAudioMessage audioMsg
     )
+
+
+recruiteNodesEtc model numbers =
+    let
+        ( deltaRecuiterAccount, newGraph1 ) =
+            recruitMoreNodes_ model numbers
+
+        ( transactionRecord, newGraph ) =
+            transactions_ model numbers newGraph1
+    in
+    ( ( deltaRecuiterAccount, transactionRecord ), newGraph )
+
+
+recruitMoreNodes_ model numbers =
+    -- New recruitees recruit other nodes at random
+    case
+        model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep
+    of
+        False ->
+            ( 0, model.graph )
+
+        True ->
+            ( 1, Network.recruitRandom numbers model.recruiter model.graph )
+
+
+transactions_ model numbers graph =
+    case model.gameState == Phase2 of
+        False ->
+            ( Nothing, graph )
+
+        True ->
+            Network.randomTransaction model.gameClock (List.head numbers) (List.head (List.drop 1 numbers)) 1.0 graph
+
+
+messages_ model transactionRecord =
+    case transactionRecord of
+        Nothing ->
+            ( model.message, 0 )
+
+        Just ( i, j ) ->
+            ( "Transfer 1 unit from node " ++ String.fromInt i ++ " to node " ++ String.fromInt j, 1 )
+
+
+newGameState_ model =
+    let
+        everyoneRecruited =
+            Grid.recruitedCount model.grid == Graph.size model.graph
+    in
+    case ( model.gameState, everyoneRecruited ) of
+        ( Phase1, True ) ->
+            Phase2
+
+        ( GameEnding, _ ) ->
+            GameOver
+
+        _ ->
+            model.gameState
+
+
+nextHistory_ model =
+    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep) then
+        measures model :: model.history
+
+    else
+        model.history
+
+
+audioMsg_2 newGameState recruitCount2 recruitCount1 =
+    case ( newGameState, recruitCount2 - recruitCount1 > 0 ) of
+        ( GameEnding, _ ) ->
+            VeryLongChirp
+
+        ( Phase1, True ) ->
+            Coo
+
+        _ ->
+            Silence
+
+
+
+-- /randomUpdate
 
 
 resetGame model =
