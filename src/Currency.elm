@@ -1,4 +1,4 @@
-module Currency exposing (Bank, Currency, Expiration(..), create, credit, debit)
+module Currency exposing (Bank, BankTime, Currency, Expiration(..), create, credit, creditMany, debit, debitMany)
 
 import List.Extra
 
@@ -19,7 +19,7 @@ type Expiration
     | Finite Int
 
 
-type alias TimeUnit =
+type alias BankTime =
     Int
 
 
@@ -31,7 +31,7 @@ epsilon =
     0.000001
 
 
-create : Expiration -> TimeUnit -> CurrencyUnit -> Bank -> Bank
+create : Expiration -> BankTime -> CurrencyUnit -> Bank -> Bank
 create expiration creationTime amount bank =
     let
         newCurrency =
@@ -62,7 +62,7 @@ create expiration creationTime amount bank =
           : ( List Currency, List Currency )
 
 -}
-debit : TimeUnit -> Float -> List Currency -> ( List Currency, List Currency )
+debit : BankTime -> Float -> List Currency -> ( List Currency, List Currency )
 debit t amount account_ =
     let
         sortedAccount_ =
@@ -82,7 +82,7 @@ debit t amount account_ =
     ( withDrawals2, account3 )
 
 
-isValid : TimeUnit -> Currency -> Bool
+isValid : BankTime -> Currency -> Bool
 isValid t c =
     case c.expiration of
         Infinite ->
@@ -105,7 +105,7 @@ isValid t c =
           : List Currency
 
 -}
-credit : TimeUnit -> Currency -> List Currency -> List Currency
+credit : BankTime -> Currency -> List Currency -> List Currency
 credit t c account__ =
     let
         account_ =
@@ -117,6 +117,20 @@ credit t c account__ =
 
         _ ->
             c :: account_
+
+
+creditMany : BankTime -> List Currency -> List Currency -> List Currency
+creditMany t incoming account_ =
+    List.foldl (\c acct -> credit t c acct) account_ incoming
+
+
+
+-- debit : BankTime -> Float -> List Currency -> ( List Currency, List Currency )
+
+
+debitMany : BankTime -> List Currency -> List Currency -> List Currency
+debitMany t incoming account_ =
+    List.foldl (\c acct -> debit t c.amount acct |> Tuple.second) account_ incoming
 
 
 debitFolder : Currency -> ( Float, ( List Currency, List Currency ) ) -> ( Float, ( List Currency, List Currency ) )

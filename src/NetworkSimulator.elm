@@ -8,6 +8,7 @@ import Browser
 import Browser.Events
 import CellGrid exposing (CellGrid, CellRenderer)
 import Color
+import Currency exposing (Bank, Expiration(..))
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -130,6 +131,7 @@ measures model =
 
 type alias Model =
     { drag : Maybe Drag
+    , centralBank : Bank
     , recruiter : NodeId
     , clickCount : Int
     , graph : Graph Entity EdgeLabel
@@ -184,6 +186,7 @@ init _ =
             Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
     ( { drag = Nothing
+      , centralBank = Currency.create (Finite 300) 0 1000 (Bank [])
       , graph = graph
       , recruiter = 12
       , clickCount = 0
@@ -365,10 +368,16 @@ handleMouseClick model index xy =
                     False ->
                         LongChirp
 
+            ( moneyForRecuiter, bankBalance1 ) =
+                Currency.debit model.gameClock 1 model.centralBank.balance
+
+            ( moneyForRecruitee, bankBalance2 ) =
+                Currency.debit model.gameClock 10 bankBalance1
+
             newGraph =
                 Network.setStatus index Recruited model.graph
-                    |> Network.creditNode model.recruiter 1
-                    |> Network.changeAccountBalance index 10
+                    |> Network.creditNode model.gameClock model.recruiter moneyForRecuiter
+                    |> Network.changeAccountBalance model.gameClock index moneyForRecruitee
                     |> Network.connect model.recruiter index
                     |> Network.incrementRecruitedCount model.recruiter
                     |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
@@ -378,11 +387,15 @@ handleMouseClick model index xy =
 
             forces =
                 Network.computeForces newGraph
+
+            centralBank =
+                model.centralBank
         in
         { model
             | graph = newGraph
             , grid = newGrid
             , simulation = Force.simulation forces
+            , centralBank = { centralBank | balance = bankBalance2 }
             , clickCount = model.clickCount + 1
             , message = "Recruit node " ++ String.fromInt index
         }
@@ -477,7 +490,7 @@ randomUpdate model numbers =
                     ( Nothing, newGraph1 )
 
                 True ->
-                    Network.randomTransaction (List.head numbers) (List.head (List.drop 1 numbers)) (Network.simpleTransaction 1) newGraph1
+                    Network.randomTransaction model.gameClock (List.head numbers) (List.head (List.drop 1 numbers)) 1.0 newGraph1
 
         ( message, deltaTransactions ) =
             case transactionRecord of
@@ -586,7 +599,8 @@ handleMouseClickInGrid model msg_ =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
-                            |> Network.changeAccountBalance index 10
+                            |> Network.changeAccountBalance model.gameClock index [ { expiration = Finite 300, time = model.gameClock, amount = 10 } ]
+                            -- xxx
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter
                             |> Network.connectNodeToNodeInList model.recruiter associatedOutgoingNodeIds
@@ -695,7 +709,7 @@ nodeElement model node =
 
         accBal : Float
         accBal =
-            node.label.value.accountBalance
+            Network.balanceFromNodeState node.label.value
     in
     g []
         [ circle
@@ -713,7 +727,7 @@ nodeElement model node =
             , fontSize (Px 12)
             , stroke (Color.rgba 1 1 1 1)
             ]
-            [ Svg.text (String.fromFloat (Utility.roundTo 0 node.label.value.accountBalance)) ]
+            [ Svg.text (String.fromFloat (Utility.roundTo 0 (Network.balanceFromNodeState node.label.value))) ]
         ]
 
 
@@ -873,7 +887,7 @@ numberOfTradersDisplay model =
     let
         nodeFilter : Entity -> Bool
         nodeFilter entity =
-            (Network.nodeState entity).accountBalance > 0
+            Network.balanceFromEntity entity > 0
 
         n =
             List.length <| Network.filterNodes nodeFilter model.graph
