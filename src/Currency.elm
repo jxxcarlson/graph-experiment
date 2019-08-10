@@ -1,4 +1,4 @@
-module Currency exposing (Currency, Expiration(..), credit, debit)
+module Currency exposing (Bank, Currency, Expiration(..), create, credit, debit)
 
 import List.Extra
 
@@ -10,6 +10,10 @@ type alias Currency =
     }
 
 
+type alias Bank =
+    { balance : List Currency }
+
+
 type Expiration
     = Infinite
     | Finite Int
@@ -19,8 +23,21 @@ type alias TimeUnit =
     Int
 
 
+type alias CurrencyUnit =
+    Float
+
+
 epsilon =
     0.000001
+
+
+create : Expiration -> TimeUnit -> CurrencyUnit -> Bank -> Bank
+create expiration creationTime amount bank =
+    let
+        newCurrency =
+            { amount = amount, expiration = expiration, time = creationTime }
+    in
+    { bank | balance = credit creationTime newCurrency bank.balance }
 
 
 {-|
@@ -94,7 +111,7 @@ credit t c account__ =
         account_ =
             List.filter (isValid t) account__
     in
-    case List.filter (\e -> e.time == c.time) account_ of
+    case List.filter (\e -> e.time == c.time && e.expiration == c.expiration) account_ of
         [ e ] ->
             List.Extra.updateIf (\ee -> ee.time == c.time) (\ee -> { ee | amount = ee.amount + c.amount }) account_
 

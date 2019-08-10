@@ -54,7 +54,7 @@ module Network exposing
     , zeroEdgeLabel
     )
 
-import Currency exposing (Currency, Expiration)
+import Currency exposing (Currency, Expiration(..))
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
