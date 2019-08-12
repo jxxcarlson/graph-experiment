@@ -55,7 +55,7 @@ module Network exposing
     , zeroEdgeLabel
     )
 
-import Currency exposing (BankTime, Currency, Expiration(..))
+import Currency exposing (BankTime, Currency, CurrencyType(..), Expiration(..))
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
@@ -283,11 +283,12 @@ zeroEdgeLabel =
     { transactions = [] }
 
 
-mintCurrency : Float -> Currency
-mintCurrency amount =
+mintCurrency : CurrencyType -> Float -> Currency
+mintCurrency currencyType amount =
     { amount = amount
     , time = 0
     , expiration = Finite 50
+    , currencyType = currencyType
     }
 
 
@@ -964,7 +965,7 @@ recruitRandom numbers designatedRecruiter graph =
             let
                 freeCurrency =
                     -- xxx
-                    { expiration = Finite 300, amount = 10, time = 0 }
+                    { expiration = Finite 300, amount = 10, time = 0, currencyType = Complementary }
             in
             connect recruiterNodeId recruiteeNodeId graph
                 |> setStatus recruiteeNodeId Recruited

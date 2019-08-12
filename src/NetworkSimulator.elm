@@ -8,7 +8,7 @@ import Browser
 import Browser.Events
 import CellGrid exposing (CellGrid, CellRenderer)
 import Color
-import Currency exposing (Bank, Expiration(..), Transaction)
+import Currency exposing (Bank, CurrencyType(..), Expiration(..), Transaction)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -34,6 +34,17 @@ import TypedSvg.Attributes.InPx as Apx exposing (cx, cy, r, strokeWidth, x, x1, 
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 import Utility
+
+
+type alias Config =
+    { expiration : Expiration
+    }
+
+
+config : Config
+config =
+    { expiration = Finite 100
+    }
 
 
 gameTimeInterval =
@@ -186,7 +197,7 @@ init _ =
             Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
     ( { drag = Nothing
-      , centralBank = Currency.create (Finite 100) 0 1000 (Bank [])
+      , centralBank = Currency.create Complementary (Finite 100) 0 1000 (Bank [])
       , graph = graph
       , recruiter = 12
       , clickCount = 0
@@ -658,7 +669,7 @@ handleMouseClickInGrid model msg_ =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
-                            |> Network.changeAccountBalance model.gameClock index [ { expiration = Finite 300, time = model.gameClock, amount = 10 } ]
+                            |> Network.changeAccountBalance model.gameClock index [ { expiration = config.expiration, currencyType = Complementary, time = model.gameClock, amount = 10 } ]
                             -- xxx
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter

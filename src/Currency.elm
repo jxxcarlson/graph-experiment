@@ -3,6 +3,7 @@ module Currency exposing
     , Bank
     , BankTime
     , Currency
+    , CurrencyType(..)
     , Expiration(..)
     , Transaction
     , create
@@ -18,9 +19,15 @@ import List.Extra
 
 type alias Currency =
     { amount : Float
+    , currencyType : CurrencyType
     , time : Int
     , expiration : Expiration
     }
+
+
+type CurrencyType
+    = Fiat
+    | Complementary
 
 
 type alias Account =
@@ -52,11 +59,11 @@ epsilon =
     0.000001
 
 
-create : Expiration -> BankTime -> CurrencyUnit -> Bank -> Bank
-create expiration creationTime amount bank =
+create : CurrencyType -> Expiration -> BankTime -> CurrencyUnit -> Bank -> Bank
+create currencyType expiration creationTime amount bank =
     let
         newCurrency =
-            { amount = amount, expiration = expiration, time = creationTime }
+            { amount = amount, expiration = expiration, time = creationTime, currencyType = currencyType }
     in
     { bank | balance = credit creationTime newCurrency bank.balance }
 
@@ -101,6 +108,21 @@ debit t amount account_ =
             List.filter (\e -> abs e.amount > epsilon) account2
     in
     ( withDrawals2, account3 )
+
+
+debitFolder : Currency -> ( Float, ( Transaction, Account ) ) -> ( Float, ( Transaction, Account ) )
+debitFolder c ( amtRemaining, ( withDrawal, account ) ) =
+    let
+        amountToWithdraw =
+            min c.amount amtRemaining
+
+        newAccountEntry =
+            { c | amount = c.amount - amountToWithdraw }
+
+        newTransaction =
+            { c | amount = amountToWithdraw }
+    in
+    ( amtRemaining - amountToWithdraw, ( newTransaction :: withDrawal, newAccountEntry :: account ) )
 
 
 isValid : BankTime -> Currency -> Bool
@@ -157,18 +179,3 @@ creditMany t incoming account_ =
 debitMany : BankTime -> Transaction -> Account -> Account
 debitMany t incoming account_ =
     List.foldl (\c acct -> debit t c.amount acct |> Tuple.second) account_ incoming
-
-
-debitFolder : Currency -> ( Float, ( Transaction, Account ) ) -> ( Float, ( Transaction, Account ) )
-debitFolder c ( amtRemaining, ( withDrawal, account ) ) =
-    let
-        amountToWithdraw =
-            min c.amount amtRemaining
-
-        newAccountEntry =
-            { c | amount = c.amount - amountToWithdraw }
-
-        newTransaction =
-            { amount = amountToWithdraw, time = c.time, expiration = c.expiration }
-    in
-    ( amtRemaining - amountToWithdraw, ( newTransaction :: withDrawal, newAccountEntry :: account ) )
