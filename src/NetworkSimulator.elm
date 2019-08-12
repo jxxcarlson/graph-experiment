@@ -186,7 +186,7 @@ init _ =
             Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
     ( { drag = Nothing
-      , centralBank = Currency.create (Finite 300) 0 1000 (Bank [])
+      , centralBank = Currency.create (Finite 100) 0 1000 (Bank [])
       , graph = graph
       , recruiter = 12
       , clickCount = 0
