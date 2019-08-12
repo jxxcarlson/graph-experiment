@@ -38,29 +38,21 @@ import Utility
 
 type alias Config =
     { expiration : Expiration
+    , gameTimeInterval : Float
+    , recruitInterval : Int
+    , recruitStep : Int
+    , epsilon : Float
     }
 
 
 config : Config
 config =
     { expiration = Finite 100
+    , gameTimeInterval = 1000
+    , recruitInterval = 8
+    , recruitStep = 0
+    , epsilon = 0.000001
     }
-
-
-gameTimeInterval =
-    1000
-
-
-recruitInterval =
-    8
-
-
-recruitStep =
-    0
-
-
-epsilon =
-    0.000001
 
 
 
@@ -560,7 +552,7 @@ recruiteNodesEtc model numbers =
 recruitMoreNodes_ model numbers =
     -- New recruitees recruit other nodes at random
     case
-        model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep
+        model.gameState == Phase1 && modBy config.recruitInterval model.gameClock == config.recruitStep
     of
         False ->
             ( 0, model.graph )
@@ -604,7 +596,7 @@ newGameState_ model =
 
 
 nextHistory_ model =
-    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy recruitInterval model.gameClock == recruitStep) then
+    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy config.recruitInterval model.gameClock == config.recruitStep) then
         measures model :: model.history
 
     else
@@ -700,7 +692,7 @@ getRandomNumbers =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch [ simulationSubscription model, Time.every gameTimeInterval GameTick ]
+    Sub.batch [ simulationSubscription model, Time.every config.gameTimeInterval GameTick ]
 
 
 simulationSubscription : Model -> Sub Msg
@@ -754,7 +746,7 @@ linkElement graph edge =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
 
         color =
-            if Network.absoluteEdgeFlow edge < epsilon then
+            if Network.absoluteEdgeFlow edge < config.epsilon then
                 Color.rgb255 255 255 255
 
             else
