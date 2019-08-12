@@ -2,6 +2,7 @@ module Network exposing
     ( EdgeLabel
     , Entity
     , NodeState
+    , Role(..)
     , SimpleGraph
     , Status(..)
     , absoluteEdgeFlow
@@ -109,6 +110,7 @@ type alias GraphId =
 type alias NodeState =
     { name : String
     , status : Status
+    , role : Role
     , accountBalance : List Currency
     , parentGraphId : GraphId
     , numberRecruited : Int
@@ -186,6 +188,7 @@ activeTraders graph =
 
 debitNode : BankTime -> NodeId -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 debitNode t nodeId_ incoming graph =
+    -- xxx NOTE: improve code
     Graph.mapNodes
         (\n ->
             if n.id == nodeId_ then
@@ -195,6 +198,7 @@ debitNode t nodeId_ incoming graph =
                         , status = n.value.status
                         , accountBalance = Currency.debitMany t incoming n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
+                        , role = n.value.role
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
                         }
@@ -208,6 +212,7 @@ debitNode t nodeId_ incoming graph =
 
 creditNode : BankTime -> NodeId -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 creditNode t nodeId_ incoming graph =
+    -- xxx NOTE: improve code!
     Graph.mapNodes
         (\n ->
             if n.id == nodeId_ then
@@ -217,6 +222,7 @@ creditNode t nodeId_ incoming graph =
                         , status = n.value.status
                         , accountBalance = Currency.creditMany t incoming n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
+                        , role = n.value.role
                         , numberRecruited = n.value.numberRecruited
                         , location = n.value.location
                         }
@@ -512,14 +518,9 @@ randomPairs modulus n seed =
     List.map2 Tuple.pair (integerSequence modulus n seed) (integerSequence modulus n (seed * seed))
 
 
-unrecruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
-unrecruitedNodeState graphId name ( i, j ) =
-    { name = name, accountBalance = [], parentGraphId = graphId, status = NotRecruited, numberRecruited = 0, location = ( i, j ) }
-
-
-recruitedNodeState : GraphId -> String -> ( Int, Int ) -> NodeState
-recruitedNodeState graphId name ( i, j ) =
-    { name = name, accountBalance = [], parentGraphId = graphId, status = Recruited, numberRecruited = 0, location = ( i, j ) }
+setNodeState : GraphId -> Role -> Status -> String -> ( Int, Int ) -> NodeState
+setNodeState graphId role status name ( i, j ) =
+    { name = name, role = role, status = status, accountBalance = [], parentGraphId = graphId, numberRecruited = 0, location = ( i, j ) }
 
 
 makeEdge : ( NodeId, NodeId ) -> Edge EdgeLabel
@@ -527,22 +528,26 @@ makeEdge ( from, to ) =
     { from = from, to = to, label = zeroEdgeLabel }
 
 
+testNodes =
+    [ Node 0 (setNodeState 0 Shopkeeper NotRecruited "p0" ( 10, 18 ))
+    , Node 1 (setNodeState 0 Unemployed NotRecruited "p1" ( 16, 15 ))
+    , Node 2 (setNodeState 0 Unemployed NotRecruited "p2" ( 13, 17 ))
+    , Node 3 (setNodeState 0 Unemployed NotRecruited "p3" ( 3, 12 ))
+    , Node 4 (setNodeState 0 Unemployed NotRecruited "p4" ( 19, 19 ))
+    , Node 5 (setNodeState 0 Unemployed NotRecruited "p5" ( 2, 1 ))
+    , Node 6 (setNodeState 1 Unemployed NotRecruited "q0" ( 9, 3 ))
+    , Node 7 (setNodeState 1 Unemployed NotRecruited "q1" ( 7, 13 ))
+    , Node 8 (setNodeState 1 Unemployed NotRecruited "q2" ( 11, 11 ))
+    , Node 9 (setNodeState 1 Unemployed NotRecruited "q3" ( 4, 6 ))
+    , Node 10 (setNodeState 1 Unemployed NotRecruited "q4" ( 18, 2 ))
+    , Node 11 (setNodeState 1 Shopkeeper NotRecruited "q5" ( 17, 8 ))
+    , Node 12 (setNodeState 100 Unemployed Recruited "r" ( 8, 10 ))
+    ]
+
+
 hiddenTestGraph =
     Graph.fromNodesAndEdges
-        [ Node 0 (unrecruitedNodeState 0 "p0" ( 10, 18 ))
-        , Node 1 (unrecruitedNodeState 0 "p1" ( 16, 15 ))
-        , Node 2 (unrecruitedNodeState 0 "p2" ( 13, 17 ))
-        , Node 3 (unrecruitedNodeState 0 "p3" ( 3, 12 ))
-        , Node 4 (unrecruitedNodeState 0 "p4" ( 19, 19 ))
-        , Node 5 (unrecruitedNodeState 0 "p5" ( 2, 1 ))
-        , Node 6 (unrecruitedNodeState 1 "q0" ( 9, 3 ))
-        , Node 7 (unrecruitedNodeState 1 "q1" ( 7, 13 ))
-        , Node 8 (unrecruitedNodeState 1 "q2" ( 11, 11 ))
-        , Node 9 (unrecruitedNodeState 1 "q3" ( 4, 6 ))
-        , Node 10 (unrecruitedNodeState 1 "q4" ( 18, 2 ))
-        , Node 11 (unrecruitedNodeState 1 "q5" ( 17, 8 ))
-        , Node 12 (recruitedNodeState 100 "r" ( 8, 10 ))
-        ]
+        testNodes
         [ makeEdge ( 0, 1 )
         , makeEdge ( 0, 2 )
         , makeEdge ( 0, 3 )
@@ -558,25 +563,12 @@ hiddenTestGraph =
 
 testGraph =
     Graph.fromNodesAndEdges
-        [ Node 0 (unrecruitedNodeState 0 "p0" ( 10, 18 ))
-        , Node 1 (unrecruitedNodeState 0 "p1" ( 16, 15 ))
-        , Node 2 (unrecruitedNodeState 0 "p2" ( 13, 17 ))
-        , Node 3 (unrecruitedNodeState 0 "p3" ( 3, 12 ))
-        , Node 4 (unrecruitedNodeState 0 "p4" ( 19, 19 ))
-        , Node 5 (unrecruitedNodeState 0 "p5" ( 2, 1 ))
-        , Node 6 (unrecruitedNodeState 1 "q0" ( 9, 3 ))
-        , Node 7 (unrecruitedNodeState 1 "q1" ( 7, 13 ))
-        , Node 8 (unrecruitedNodeState 1 "q2" ( 11, 11 ))
-        , Node 9 (unrecruitedNodeState 1 "q3" ( 4, 6 ))
-        , Node 10 (unrecruitedNodeState 1 "q4" ( 18, 2 ))
-        , Node 11 (unrecruitedNodeState 1 "q5" ( 17, 8 ))
-        , Node 12 (recruitedNodeState 100 "r" ( 8, 10 ))
-        ]
+        testNodes
         []
 
 
 defaultNodeState =
-    { name = "", status = NotRecruited, accountBalance = [], parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
+    { name = "", status = NotRecruited, role = Unemployed, accountBalance = [], parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
 
 initializeNode : NodeContext NodeState EdgeLabel -> NodeContext Entity EdgeLabel
@@ -635,6 +627,7 @@ reheatGraph inputGraph =
 
 setStatus : Int -> Status -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 setStatus nodeIndex status graph =
+    -- xxx : NOTE improve code
     Graph.mapNodes
         (\n ->
             if n.id == nodeIndex then
@@ -642,6 +635,7 @@ setStatus nodeIndex status graph =
                     | value =
                         { name = n.value.name
                         , status = status
+                        , role = n.value.role
                         , accountBalance = n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
@@ -657,6 +651,7 @@ setStatus nodeIndex status graph =
 
 changeAccountBalance : BankTime -> Int -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 changeAccountBalance t nodeIndex incoming graph =
+    -- xxx NOTE: improve code!
     Graph.mapNodes
         (\n ->
             if n.id == nodeIndex then
@@ -664,6 +659,7 @@ changeAccountBalance t nodeIndex incoming graph =
                     | value =
                         { name = n.value.name
                         , status = n.value.status
+                        , role = n.value.role
                         , accountBalance = Currency.creditMany t incoming n.value.accountBalance
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited
@@ -732,6 +728,7 @@ areConnected n1 n2 g =
 
 incrementRecruitedCount : NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 incrementRecruitedCount nodeId graph =
+    -- xxx NOTE: improve code!
     Graph.mapNodes
         (\n ->
             if n.id == nodeId then
@@ -740,6 +737,7 @@ incrementRecruitedCount nodeId graph =
                         { name = n.value.name
                         , status = n.value.status
                         , accountBalance = n.value.accountBalance
+                        , role = n.value.role
                         , parentGraphId = n.value.parentGraphId
                         , numberRecruited = n.value.numberRecruited + 1
                         , location = n.value.location

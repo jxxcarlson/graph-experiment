@@ -23,13 +23,13 @@ import IntDict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import List.Extra
-import Network exposing (EdgeLabel, Entity, NodeState, Status(..), creditNode, moneySupply)
+import Network exposing (EdgeLabel, Entity, NodeState, Role(..), Status(..), creditNode, moneySupply)
 import NetworkMeasure as NM
 import Random
 import SimpleGraph
 import Time
 import TypedSvg exposing (circle, g, line, rect, svg, text_, title)
-import TypedSvg.Attributes exposing (class, fill, fontSize, stroke, transform, viewBox)
+import TypedSvg.Attributes as TSA exposing (class, fill, fontSize, stroke, transform, viewBox)
 import TypedSvg.Attributes.InPx as Apx exposing (cx, cy, r, strokeWidth, x, x1, x2, y, y1, y2)
 import TypedSvg.Core as Svg exposing (Attribute, Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
@@ -787,15 +787,9 @@ nodeElement model node =
             Network.balanceFromNodeState node.label.value
     in
     g []
-        [ circle
-            [ r <| 12.0 + (accBal / 2.5)
-            , nodeColorizer node
-            , stroke (Color.rgba 0 0 0 0)
-            , strokeWidth 7
-            , mouseHandler node.id
-            , cx node.label.x
-            , cy node.label.y
-            ]
+        [ nodeShape node
+            mouseHandler
+            accBal
             [ title [] [ Svg.text node.label.value.name ] ]
         , text_
             [ transform [ Translate (node.label.x - 6) (node.label.y + 3) ]
@@ -806,24 +800,54 @@ nodeElement model node =
         ]
 
 
+nodeShape node mouseHandler accBal =
+    case node.label.value.role of
+        Unemployed ->
+            circle
+                [ r <| 12.0 + (accBal / 2.5)
+                , nodeColorizer node
+                , stroke (Color.rgba 0 0 0 0)
+                , strokeWidth 7
+                , mouseHandler node.id
+                , cx node.label.x
+                , cy node.label.y
+                ]
+
+        Shopkeeper ->
+            let
+                r =
+                    24.0 + (accBal / 2.5)
+            in
+            rect
+                [ TSA.width (Px r)
+                , TSA.height (Px r)
+                , nodeColorizer node
+                , stroke (Color.rgba 0 0 0 0)
+                , strokeWidth 7
+                , mouseHandler node.id
+                , x (node.label.x - 15)
+                , y (node.label.y - 12)
+                ]
+
+
 nodeColorizer node =
     case node.label.value.status of
         NotRecruited ->
-            TypedSvg.Attributes.fill (Fill (Color.rgb255 0 0 255))
+            TSA.fill (Fill (Color.rgb255 0 0 255))
 
         Recruited ->
             case node.label.value.parentGraphId of
                 100 ->
-                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 65 238))
+                    TSA.fill (Fill (Color.rgb255 244 65 238))
 
                 0 ->
-                    TypedSvg.Attributes.fill (Fill (Color.rgb255 0 180 0))
+                    TSA.fill (Fill (Color.rgb255 0 180 0))
 
                 1 ->
-                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 128 65))
+                    TSA.fill (Fill (Color.rgb255 244 128 65))
 
                 _ ->
-                    TypedSvg.Attributes.fill (Fill (Color.rgb255 244 65 238))
+                    TSA.fill (Fill (Color.rgb255 244 65 238))
 
 
 
