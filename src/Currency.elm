@@ -11,7 +11,9 @@ module Currency exposing
     , creditMany
     , debit
     , debitMany
+    , isValid
     , removeInvalid
+    , tenUnits
     )
 
 import List.Extra
@@ -57,6 +59,10 @@ type alias CurrencyUnit =
 
 epsilon =
     0.000001
+
+
+tenUnits =
+    { amount = 10, currencyType = Complementary, expiration = Finite 10, time = 1 }
 
 
 create : CurrencyType -> Expiration -> BankTime -> CurrencyUnit -> Bank -> Bank

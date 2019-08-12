@@ -353,7 +353,12 @@ handleGameTick model t =
             )
 
         Phase2 ->
-            ( { model | gameClock = model.gameClock + 1 }, getRandomNumbers )
+            ( { model
+                | gameClock = model.gameClock + 1
+                , graph = Network.removeExpiredCurrencyFromEdges model.gameClock model.graph
+              }
+            , getRandomNumbers
+            )
 
         _ ->
             ( model, getRandomNumbers )

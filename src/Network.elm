@@ -46,6 +46,7 @@ module Network exposing
     , recruitRandom
     , recruitRandomFreeNode
     , reheatGraph
+    , removeExpiredCurrencyFromEdges
     , setStatus
     , setupGraph
     , showEdgeLabel
@@ -124,15 +125,17 @@ simplifyGraph g =
     Graph.mapNodes (\n -> n.value) g
 
 
+removeExpiredCurrencyFromEdges : BankTime -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+removeExpiredCurrencyFromEdges bt g =
+    let
+        edgeTransformer : EdgeLabel -> EdgeLabel
+        edgeTransformer e =
+            { e | transactions = Currency.removeInvalid bt e.transactions }
+    in
+    Graph.mapEdges edgeTransformer g
 
--- removeExpiredCurrencyFromEdges : BankTime -> Graph Entity EdgeLabel -> Graph NodeState EdgeLabel
--- removeExpiredCurrencyFromEdges bt g =
---     let
---         edgeTransformer : EdgeLabel -> EdgeLabel
---         edgeTransformer e =
---             { e | transactions = e.transactions }
---     in
---     Graph.mapEdges edgeTransformer g
+
+
 -- FILTER GRAPH --
 
 
