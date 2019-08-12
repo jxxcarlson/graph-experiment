@@ -289,7 +289,7 @@ zeroEdgeLabel =
 mintCurrency : CurrencyType -> Float -> Currency
 mintCurrency currencyType amount =
     { amount = amount
-    , time = 0
+    , issueTime = 0
     , expiration = Finite 50
     , currencyType = currencyType
     }
@@ -435,7 +435,7 @@ stringFromTransaction tr =
     "("
         ++ String.fromFloat (Utility.roundTo 0 tr.amount)
         ++ ", "
-        ++ String.fromInt tr.time
+        ++ String.fromInt tr.issueTime
         ++ ", "
         ++ stringFromExpiration tr.expiration
         ++ ")"
@@ -968,7 +968,7 @@ recruitRandom numbers designatedRecruiter graph =
             let
                 freeCurrency =
                     -- xxx
-                    { expiration = Finite 300, amount = 10, time = 0, currencyType = Complementary }
+                    { expiration = Finite 300, amount = 10, issueTime = 0, currencyType = Complementary }
             in
             connect recruiterNodeId recruiteeNodeId graph
                 |> setStatus recruiteeNodeId Recruited

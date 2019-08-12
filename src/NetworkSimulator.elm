@@ -674,7 +674,7 @@ handleMouseClickInGrid model msg_ =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
-                            |> Network.changeAccountBalance model.gameClock index [ { expiration = config.expiration, currencyType = Complementary, time = model.gameClock, amount = 10 } ]
+                            |> Network.changeAccountBalance model.gameClock index [ { expiration = config.expiration, currencyType = Complementary, issueTime = model.gameClock, amount = 10 } ]
                             -- xxx
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter

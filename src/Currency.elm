@@ -22,7 +22,7 @@ import List.Extra
 type alias Currency =
     { amount : Float
     , currencyType : CurrencyType
-    , time : Int
+    , issueTime : Int
     , expiration : Expiration
     }
 
@@ -62,14 +62,14 @@ epsilon =
 
 
 tenUnits =
-    { amount = 10, currencyType = Complementary, expiration = Finite 10, time = 1 }
+    { amount = 10, currencyType = Complementary, expiration = Finite 10, issueTime = 1 }
 
 
 create : CurrencyType -> Expiration -> BankTime -> CurrencyUnit -> Bank -> Bank
 create currencyType expiration creationTime amount bank =
     let
         newCurrency =
-            { amount = amount, expiration = expiration, time = creationTime, currencyType = currencyType }
+            { amount = amount, expiration = expiration, issueTime = creationTime, currencyType = currencyType }
     in
     { bank | balance = credit creationTime newCurrency bank.balance }
 
@@ -80,19 +80,19 @@ create currencyType expiration creationTime amount bank =
       > import Currency exposing(..)
 
       > debit 1 acct
-      ([{ amount = 1, expiration = Infinite, time = 0 }],[{ amount = 10, expiration = Infinite, time = 5 },{ amount = 9, expiration = Infinite, time = 0 }])
+      ([{ amount = 1, expiration = Infinite, issueTime = 0 }],[{ amount = 10, expiration = Infinite, issueTime = 5 },{ amount = 9, expiration = Infinite, issueTime = 0 }])
           : ( List Currency, List Currency )
       > debit 10 acct
-      ([{ amount = 10, expiration = Infinite, time = 0 }],[{ amount = 10, expiration = Infinite, time = 5 }])
+      ([{ amount = 10, expiration = Infinite, issueTime = 0 }],[{ amount = 10, expiration = Infinite, issueTime = 5 }])
           : ( List Currency, List Currency )
       > debit 11 acct
-      ([{ amount = 1, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[{ amount = 9, expiration = Infinite, time = 5 }])
+      ([{ amount = 1, expiration = Infinite, issueTime = 5 },{ amount = 10, expiration = Infinite, issueTime = 0 }],[{ amount = 9, expiration = Infinite, issueTime = 5 }])
           : ( List Currency, List Currency )
       > debit 20 acct
-      ([{ amount = 10, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[])
+      ([{ amount = 10, expiration = Infinite, issueTime = 5 },{ amount = 10, expiration = Infinite, issueTime = 0 }],[])
           : ( List Currency, List Currency )
       > debit 21 acct
-      ([{ amount = 10, expiration = Infinite, time = 5 },{ amount = 10, expiration = Infinite, time = 0 }],[])
+      ([{ amount = 10, expiration = Infinite, issueTime = 5 },{ amount = 10, expiration = Infinite, issueTime = 0 }],[])
           : ( List Currency, List Currency )
 
 -}
@@ -102,7 +102,7 @@ debit t amount account_ =
         sortedAccount_ =
             account_
                 |> List.filter (isValid t)
-                |> List.sortBy (\c -> c.time)
+                |> List.sortBy (\c -> c.issueTime)
 
         ( withDrawals, account2 ) =
             List.foldl debitFolder ( amount, ( [], [] ) ) account_ |> Tuple.second
@@ -138,7 +138,7 @@ isValid t c =
             True
 
         Finite expirationTime ->
-            expirationTime > t
+            expirationTime > t - c.issueTime
 
 
 removeInvalid : BankTime -> List Currency -> List Currency
@@ -149,13 +149,13 @@ removeInvalid t currencyList =
 {-|
 
       > credit c1 acct
-      [{ amount = 11, expiration = Infinite, time = 0 },{ amount = 10, expiration = Infinite, time = 5 }]
+      [{ amount = 11, expiration = Infinite, issueTime = 0 },{ amount = 10, expiration = Infinite, issueTime = 5 }]
           : List Currency
       > credit c2 acct
-      [{ amount = 10, expiration = Infinite, time = 0 },{ amount = 11, expiration = Infinite, time = 5 }]
+      [{ amount = 10, expiration = Infinite, issueTime = 0 },{ amount = 11, expiration = Infinite, issueTime = 5 }]
           : List Currency
       > credit c3 acct
-      [{ amount = 1, expiration = Infinite, time = 88 },{ amount = 10, expiration = Infinite, time = 0 },{ amount = 10, expiration = Infinite, time = 5 }]
+      [{ amount = 1, expiration = Infinite, issueTime = 88 },{ amount = 10, expiration = Infinite, issueTime = 0 },{ amount = 10, expiration = Infinite, issueTime = 5 }]
           : List Currency
 
 -}
@@ -165,9 +165,9 @@ credit t c account__ =
         account_ =
             List.filter (isValid t) account__
     in
-    case List.filter (\e -> e.time == c.time && e.expiration == c.expiration) account_ of
+    case List.filter (\e -> e.issueTime == c.issueTime && e.expiration == c.expiration) account_ of
         [ e ] ->
-            List.Extra.updateIf (\ee -> ee.time == c.time) (\ee -> { ee | amount = ee.amount + c.amount }) account_
+            List.Extra.updateIf (\ee -> ee.issueTime == c.issueTime) (\ee -> { ee | amount = ee.amount + c.amount }) account_
 
         _ ->
             c :: account_

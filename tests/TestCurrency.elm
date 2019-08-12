@@ -18,9 +18,9 @@ suite =
                             debit 0 1 acct
 
                         expected =
-                            ( [ { amount = 1, expiration = Infinite, time = 0 } ]
-                            , [ { amount = 10, expiration = Infinite, time = 5 }
-                              , { amount = 9, expiration = Infinite, time = 0 }
+                            ( [ { amount = 1, expiration = Infinite, issueTime = 0 } ]
+                            , [ { amount = 10, expiration = Infinite, issueTime = 5 }
+                              , { amount = 9, expiration = Infinite, issueTime = 0 }
                               ]
                             )
                     in
@@ -32,8 +32,8 @@ suite =
                             credit 0 c1 acct
 
                         expected =
-                            [ { amount = 11, expiration = Infinite, time = 0 }
-                            , { amount = 10, expiration = Infinite, time = 5 }
+                            [ { amount = 11, expiration = Infinite, issueTime = 0 }
+                            , { amount = 10, expiration = Infinite, issueTime = 5 }
                             ]
                     in
                     Expect.equal expected result
@@ -49,23 +49,23 @@ suite =
 
 
 c1 =
-    { amount = 1, time = 0, expiration = Infinite }
+    { amount = 1, issueTime = 0, expiration = Infinite }
 
 
 c2 =
-    { amount = 1, time = 5, expiration = Infinite }
+    { amount = 1, issueTime = 5, expiration = Infinite }
 
 
 c3 =
-    { amount = 1, time = 88, expiration = Infinite }
+    { amount = 1, issueTime = 88, expiration = Infinite }
 
 
 m1 =
-    { amount = 10, time = 0, expiration = Infinite }
+    { amount = 10, issueTime = 0, expiration = Infinite }
 
 
 m2 =
-    { amount = 10, time = 5, expiration = Infinite }
+    { amount = 10, issueTime = 5, expiration = Infinite }
 
 
 acct =
