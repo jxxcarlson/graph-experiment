@@ -26,6 +26,10 @@ epsilon =
     0.000001
 
 
+delta =
+    0.0
+
+
 accountBalances : SimpleGraph -> List Float
 accountBalances g =
     g
@@ -86,11 +90,6 @@ differences lst =
 postfixList lst =
     List.indexedMap (\k item -> ( item, List.drop (k + 1) lst )) lst
         |> List.take (List.length lst - 1)
-
-
-removeEdgesOfWeightZero : SimpleGraph -> SimpleGraph
-removeEdgesOfWeightZero g =
-    Graph.mapContexts (transformOutgoing >> transformIncoming) g
 
 
 transformOutgoing : NodeContext NodeState EdgeLabel -> NodeContext NodeState EdgeLabel
@@ -160,7 +159,7 @@ efficiencyOfEdge totalFlow_ g edge =
     in
     case abs denominator < epsilon || abs numerator < epsilon of
         True ->
-            0
+            delta
 
         False ->
             let
@@ -184,7 +183,7 @@ resilienceOfEdge totalFlow_ g edge =
     in
     case abs denominator < epsilon || abs numerator < epsilon of
         True ->
-            0
+            delta
 
         False ->
             let
@@ -223,7 +222,7 @@ alpha g =
             efficiency g
     in
     if abs eff < epsilon then
-        0
+        delta
 
     else
         let
@@ -243,7 +242,7 @@ sustainability g =
             a ^ 1.288
     in
     if abs aa < epsilon then
-        0
+        delta
 
     else
         -1.844 * aa * logBase 2 aa
