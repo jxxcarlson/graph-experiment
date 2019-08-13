@@ -67,7 +67,7 @@ config =
     , epsilon = 0.000001
     , numberOfForestWorkers = 11
     , forestIncrementPerWorker = 1
-    , forestDecayRate = 0.95
+    , forestDecayRate = 0.94
     }
 
 
@@ -472,7 +472,12 @@ buyFood shopkeeperName tick g =
         entityMapper entity =
             case Network.balanceFromEntity entity < config.epsilon of
                 True ->
-                    entity
+                    case entity.value.role of
+                        Unemployed ->
+                            entity
+
+                        Shopkeeper ->
+                            Network.changeAccountBalanceOfEntity tick [ transfer.foodSold tick ] entity
 
                 False ->
                     case entity.value.role of
