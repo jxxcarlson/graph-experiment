@@ -42,24 +42,32 @@ import Utility
 
 type alias Config =
     { expiration : Expiration
+    , forestState : Float
     , gameTimeInterval : Float
     , gameCycleLength : Int
     , recruitStep : Int
     , epsilon : Float
     , shopkeeper1 : String
     , shopkeeper2 : String
+    , numberOfForestWorkers : Int
+    , forestIncrementPerWorker : Float
+    , forestDecayRate : Float
     }
 
 
 config : Config
 config =
     { expiration = Finite 100
+    , forestState = 20
     , gameTimeInterval = 1000
     , gameCycleLength = 7
     , shopkeeper1 = "p0"
     , shopkeeper2 = "q5"
     , recruitStep = 0
     , epsilon = 0.000001
+    , numberOfForestWorkers = 11
+    , forestIncrementPerWorker = 1
+    , forestDecayRate = 0.95
     }
 
 
@@ -67,7 +75,7 @@ transfer =
     { forestPay = ccCoin 1
     , houseRent = ccCoin -0.4
     , foodBought = ccCoin -0.15
-    , foodSold = ccCoin (11 * 0.15)
+    , foodSold = ccCoin (toFloat config.numberOfForestWorkers * 0.15)
     , shopRent = ccCoin -0.8
     }
 
@@ -161,6 +169,7 @@ measures model =
 type alias Model =
     { drag : Maybe Drag
     , centralBank : Bank
+    , forestState : Float
     , recruiter : NodeId
     , clickCount : Int
     , graph : Graph Entity EdgeLabel
@@ -216,6 +225,7 @@ init _ =
     in
     ( { drag = Nothing
       , centralBank = Currency.create Complementary (Finite 100) 0 1000 (Bank [])
+      , forestState = config.forestState
       , graph = graph
       , recruiter = 12
       , clickCount = 0
@@ -371,15 +381,31 @@ handleGameTick model t =
             )
 
         Phase2 ->
-            ( { model
-                | gameClock = model.gameClock + 1
-                , graph = updateGraph model.gameClock model.graph
-              }
-            , getRandomNumbers
-            )
+            ( updateModelAtTick model.gameClock model, getRandomNumbers )
 
         _ ->
             ( model, getRandomNumbers )
+
+
+updateModelAtTick : Int -> Model -> Model
+updateModelAtTick tick model =
+    model
+        |> (\model_ -> { model_ | graph = updateGraph tick model.graph })
+        |> (\model_ -> { model_ | forestState = updateForestState tick model.forestState })
+        |> (\model_ -> { model_ | gameClock = model.gameClock + 1 })
+
+
+updateForestState : Int -> Float -> Float
+updateForestState tick forestState =
+    case modBy config.gameCycleLength tick of
+        0 ->
+            config.forestDecayRate * forestState
+
+        5 ->
+            forestState + toFloat config.numberOfForestWorkers * config.forestIncrementPerWorker
+
+        _ ->
+            forestState
 
 
 updateGraph : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
@@ -1033,6 +1059,7 @@ controlPanel model =
             ]
         , accountDisplay model
         , row [] [ el [] (text <| "Number of transactions: " ++ String.fromInt model.numberOfTransactionsToDate) ]
+        , row [] [ forestStateDisplay model ]
         , row [ Font.size 12 ] [ el [] (text model.message) ]
         , displayMeasures model
         ]
@@ -1079,6 +1106,11 @@ moneySupplyDisplay model =
             Network.moneySupply model.graph
     in
     el [] (text <| "Money supply = " ++ (String.fromFloat <| Utility.roundTo 1 <| Network.moneySupply model.graph))
+
+
+forestStateDisplay : Model -> Element Msg
+forestStateDisplay model =
+    el [] (text <| "Forest state = " ++ (String.fromFloat <| Utility.roundTo 1 <| model.forestState))
 
 
 numberOfTradersDisplay : Model -> Element Msg
@@ -1250,13 +1282,15 @@ recruitedNodes model =
 
 rightPanel : Model -> Element Msg
 rightPanel model =
-    column [ spacing 12, width (px 500), height (px 680), Border.width 1 ]
+    column [ width (px 500), height (px 680), Border.width 1 ]
         [ case model.displayMode of
             DisplayGraph ->
                 viewGraph model 500 500 |> Element.html
 
             DisplayGrid ->
                 viewGrid model 500 500 |> Element.html
+        , row [ width (px 500), Background.color (Element.rgb255 0 0 0), Border.width 1, Border.color (Element.rgb255 255 2555 255) ]
+            [ indicator 500 15 (Fill (Color.rgb255 0 255 0)) (model.forestState / 200.0) |> Element.html ]
         , row [ paddingXY 12 0 ]
             [ el [ Font.size 12, width (px 30) ] (text "Sust.")
             , sustainabilityChart model
@@ -1432,3 +1466,27 @@ selectedBackground flag =
 
         False ->
             Background.color charcoal
+
+
+
+-- INDICATOR --
+
+
+indicator barWidth barHeight color fraction =
+    svg
+        [ TSA.height (Px barHeight), TSA.width (Px barWidth) ]
+        [ hRect barWidth barHeight color fraction
+        ]
+
+
+hRect barWidth barHeight color fraction =
+    rect
+        [ TSA.width (Px (fraction * barWidth))
+        , TSA.height (Px barHeight)
+        , TSA.fill color
+        ]
+        []
+
+
+
+-- END --
