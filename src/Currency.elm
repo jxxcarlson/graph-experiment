@@ -4,6 +4,7 @@ module Currency exposing
     , BankTime
     , Currency
     , CurrencyType(..)
+    , CurrencyUnit
     , Expiration(..)
     , Transaction
     , create

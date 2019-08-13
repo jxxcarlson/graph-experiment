@@ -8,7 +8,7 @@ import Browser
 import Browser.Events
 import CellGrid exposing (CellGrid, CellRenderer)
 import Color
-import Currency exposing (Bank, CurrencyType(..), Expiration(..), Transaction)
+import Currency exposing (Bank, BankTime, Currency, CurrencyType(..), CurrencyUnit, Expiration(..), Transaction)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -36,12 +36,18 @@ import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 import Utility
 
 
+
+-- CONFIG --
+
+
 type alias Config =
     { expiration : Expiration
     , gameTimeInterval : Float
-    , recruitInterval : Int
+    , gameCycleLength : Int
     , recruitStep : Int
     , epsilon : Float
+    , shopkeeper1 : String
+    , shopkeeper2 : String
     }
 
 
@@ -49,9 +55,29 @@ config : Config
 config =
     { expiration = Finite 100
     , gameTimeInterval = 1000
-    , recruitInterval = 8
+    , gameCycleLength = 7
+    , shopkeeper1 = "p0"
+    , shopkeeper2 = "q5"
     , recruitStep = 0
     , epsilon = 0.000001
+    }
+
+
+transfer =
+    { forestPay = ccCoin 1
+    , houseRent = ccCoin -0.4
+    , foodBought = ccCoin -0.15
+    , foodSold = ccCoin (11 * 0.15)
+    , shopRent = ccCoin -0.8
+    }
+
+
+ccCoin : CurrencyUnit -> BankTime -> Currency
+ccCoin amount issueTime =
+    { amount = amount
+    , currencyType = Complementary
+    , expiration = config.expiration
+    , issueTime = issueTime
     }
 
 
@@ -347,13 +373,94 @@ handleGameTick model t =
         Phase2 ->
             ( { model
                 | gameClock = model.gameClock + 1
-                , graph = Network.removeExpiredCurrencyFromEdges model.gameClock model.graph
+                , graph = updateGraph model.gameClock model.graph
               }
             , getRandomNumbers
             )
 
         _ ->
             ( model, getRandomNumbers )
+
+
+updateGraph : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+updateGraph tick g =
+    case modBy config.gameCycleLength tick of
+        0 ->
+            Network.removeExpiredCurrencyFromEdges tick g
+
+        1 ->
+            payForForestryWork tick g
+
+        2 ->
+            payRent tick g
+
+        3 ->
+            buyFood config.shopkeeper1 tick g
+
+        4 ->
+            buyFood config.shopkeeper2 tick g
+
+        _ ->
+            g
+
+
+payForForestryWork : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+payForForestryWork tick g =
+    let
+        entityMapper : Entity -> Entity
+        entityMapper entity =
+            case entity.value.role == Unemployed of
+                True ->
+                    Network.changeAccountBalanceOfEntity tick [ transfer.forestPay tick ] entity
+
+                False ->
+                    entity
+    in
+    Graph.mapNodes entityMapper g
+
+
+payRent : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+payRent tick g =
+    let
+        entityMapper : Entity -> Entity
+        entityMapper entity =
+            case Network.balanceFromEntity entity < config.epsilon of
+                True ->
+                    entity
+
+                False ->
+                    case entity.value.role of
+                        Unemployed ->
+                            Network.changeAccountBalanceOfEntity tick [ transfer.houseRent tick ] entity
+
+                        Shopkeeper ->
+                            Network.changeAccountBalanceOfEntity tick [ transfer.shopRent tick ] entity
+    in
+    Graph.mapNodes entityMapper g
+
+
+buyFood : String -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+buyFood shopkeeperName tick g =
+    let
+        entityMapper : Entity -> Entity
+        entityMapper entity =
+            case Network.balanceFromEntity entity < config.epsilon of
+                True ->
+                    entity
+
+                False ->
+                    case entity.value.role of
+                        Unemployed ->
+                            Network.changeAccountBalanceOfEntity tick [ transfer.foodBought tick ] entity
+
+                        Shopkeeper ->
+                            Network.changeAccountBalanceOfEntity tick [ transfer.foodSold tick ] entity
+    in
+    Graph.mapNodes entityMapper g
+
+
+
+-- /handleGameTick --
 
 
 handleMouseClick model nodeId xy =
@@ -552,7 +659,7 @@ recruiteNodesEtc model numbers =
 recruitMoreNodes_ model numbers =
     -- New recruitees recruit other nodes at random
     case
-        model.gameState == Phase1 && modBy config.recruitInterval model.gameClock == config.recruitStep
+        model.gameState == Phase1 && modBy config.gameCycleLength model.gameClock == config.recruitStep
     of
         False ->
             ( 0, model.graph )
@@ -596,7 +703,7 @@ newGameState_ model =
 
 
 nextHistory_ model =
-    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy config.recruitInterval model.gameClock == config.recruitStep) then
+    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy config.gameCycleLength model.gameClock == config.recruitStep) then
         measures model :: model.history
 
     else
@@ -971,7 +1078,7 @@ moneySupplyDisplay model =
         moneySupply =
             Network.moneySupply model.graph
     in
-    el [] (text <| "Money supply = " ++ String.fromFloat (Network.moneySupply model.graph))
+    el [] (text <| "Money supply = " ++ (String.fromFloat <| Utility.roundTo 1 <| Network.moneySupply model.graph))
 
 
 numberOfTradersDisplay : Model -> Element Msg

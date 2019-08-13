@@ -13,6 +13,7 @@ module Network exposing
     , balanceFromNodeState
     , balanceFromSimpleNode
     , changeAccountBalance
+    , changeAccountBalanceOfEntity
     , changeEdgeLabel
     , computeForces
     , connect
@@ -671,6 +672,20 @@ changeAccountBalance t nodeIndex incoming graph =
                 n
         )
         graph
+
+
+changeAccountBalanceOfEntity : BankTime -> List Currency -> Entity -> Entity
+changeAccountBalanceOfEntity t incoming entity =
+    let
+        oldValue =
+            entity.value
+
+        newValue =
+            { oldValue
+                | accountBalance = Currency.creditMany t incoming oldValue.accountBalance
+            }
+    in
+    { entity | value = newValue }
 
 
 updateContextWithValue : NodeContext Entity EdgeLabel -> Entity -> NodeContext Entity EdgeLabel
