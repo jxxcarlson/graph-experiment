@@ -55,8 +55,8 @@ type alias Config =
     }
 
 
-config : Config
-config =
+defaultConfig : Config
+defaultConfig =
     { expiration = Finite 100
     , forestState = 20
     , gameTimeInterval = 1000
@@ -71,20 +71,20 @@ config =
     }
 
 
-transfer =
-    { forestPay = ccCoin 1
-    , houseRent = ccCoin -0.4
-    , foodBought = ccCoin -0.15
-    , foodSold = ccCoin (toFloat config.numberOfForestWorkers * 0.15)
-    , shopRent = ccCoin -0.8
+transfer model =
+    { forestPay = ccCoin model 1
+    , houseRent = ccCoin model -0.4
+    , foodBought = ccCoin model -0.15
+    , foodSold = ccCoin model (toFloat model.configuration.numberOfForestWorkers * 0.15)
+    , shopRent = ccCoin model -0.8
     }
 
 
-ccCoin : CurrencyUnit -> BankTime -> Currency
-ccCoin amount issueTime =
+ccCoin : Model -> CurrencyUnit -> BankTime -> Currency
+ccCoin model amount issueTime =
     { amount = amount
     , currencyType = Complementary
-    , expiration = config.expiration
+    , expiration = model.configuration.expiration
     , issueTime = issueTime
     }
 
@@ -132,6 +132,7 @@ type Msg
     | GotRandomNumbers (List Float)
     | SetDisplayMode DisplayMode
     | CellGrid CellGrid.Msg
+    | ToggleCurrencyExpiration
 
 
 type GraphBehavior
@@ -169,6 +170,7 @@ measures model =
 type alias Model =
     { drag : Maybe Drag
     , centralBank : Bank
+    , configuration : Config
     , forestState : Float
     , recruiter : NodeId
     , clickCount : Int
@@ -225,7 +227,8 @@ init _ =
     in
     ( { drag = Nothing
       , centralBank = Currency.create Complementary (Finite 100) 0 1000 (Bank [])
-      , forestState = config.forestState
+      , configuration = defaultConfig
+      , forestState = defaultConfig.forestState
       , graph = graph
       , recruiter = 12
       , clickCount = 0
@@ -350,6 +353,18 @@ update msg model =
         CellGrid msg_ ->
             handleMouseClickInGrid model msg_
 
+        ToggleCurrencyExpiration ->
+            let
+                c =
+                    model.configuration
+            in
+            case c.expiration of
+                Infinite ->
+                    ( { model | configuration = { c | expiration = Finite 100 } }, Cmd.none )
+
+                Finite _ ->
+                    ( { model | configuration = { c | expiration = Infinite } }, Cmd.none )
+
 
 
 -- UPDATE HELPERS --
@@ -390,54 +405,54 @@ handleGameTick model t =
 updateModelAtTick : Int -> Model -> Model
 updateModelAtTick tick model =
     model
-        |> (\model_ -> { model_ | graph = updateGraph tick model.graph })
-        |> (\model_ -> { model_ | forestState = updateForestState tick model.forestState })
+        |> (\model_ -> { model_ | graph = updateGraph model tick model.graph })
+        |> (\model_ -> { model_ | forestState = updateForestState model tick model.forestState })
         |> (\model_ -> { model_ | gameClock = model.gameClock + 1 })
 
 
-updateForestState : Int -> Float -> Float
-updateForestState tick forestState =
-    case modBy config.gameCycleLength tick of
+updateForestState : Model -> Int -> Float -> Float
+updateForestState model tick forestState =
+    case modBy model.configuration.gameCycleLength tick of
         0 ->
-            config.forestDecayRate * forestState
+            model.configuration.forestDecayRate * forestState
 
         5 ->
-            forestState + toFloat config.numberOfForestWorkers * config.forestIncrementPerWorker
+            forestState + toFloat model.configuration.numberOfForestWorkers * model.configuration.forestIncrementPerWorker
 
         _ ->
             forestState
 
 
-updateGraph : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-updateGraph tick g =
-    case modBy config.gameCycleLength tick of
+updateGraph : Model -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+updateGraph model tick g =
+    case modBy model.configuration.gameCycleLength tick of
         0 ->
             Network.removeExpiredCurrencyFromEdges tick g
 
         1 ->
-            payForForestryWork tick g
+            payForForestryWork model tick g
 
         2 ->
-            payRent tick g
+            payRent model tick g
 
         3 ->
-            buyFood config.shopkeeper1 tick g
+            buyFood model model.configuration.shopkeeper1 tick g
 
         4 ->
-            buyFood config.shopkeeper2 tick g
+            buyFood model model.configuration.shopkeeper2 tick g
 
         _ ->
             g
 
 
-payForForestryWork : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-payForForestryWork tick g =
+payForForestryWork : Model -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+payForForestryWork model tick g =
     let
         entityMapper : Entity -> Entity
         entityMapper entity =
             case entity.value.role == Unemployed of
                 True ->
-                    Network.changeAccountBalanceOfEntity tick [ transfer.forestPay tick ] entity
+                    Network.changeAccountBalanceOfEntity tick [ (transfer model).forestPay tick ] entity
 
                 False ->
                     entity
@@ -445,47 +460,47 @@ payForForestryWork tick g =
     Graph.mapNodes entityMapper g
 
 
-payRent : Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-payRent tick g =
+payRent : Model -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+payRent model tick g =
     let
         entityMapper : Entity -> Entity
         entityMapper entity =
-            case Network.balanceFromEntity entity < config.epsilon of
+            case Network.balanceFromEntity entity < model.configuration.epsilon of
                 True ->
                     entity
 
                 False ->
                     case entity.value.role of
                         Unemployed ->
-                            Network.changeAccountBalanceOfEntity tick [ transfer.houseRent tick ] entity
+                            Network.changeAccountBalanceOfEntity tick [ (transfer model).houseRent tick ] entity
 
                         Shopkeeper ->
-                            Network.changeAccountBalanceOfEntity tick [ transfer.shopRent tick ] entity
+                            Network.changeAccountBalanceOfEntity tick [ (transfer model).shopRent tick ] entity
     in
     Graph.mapNodes entityMapper g
 
 
-buyFood : String -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-buyFood shopkeeperName tick g =
+buyFood : Model -> String -> Int -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+buyFood model shopkeeperName tick g =
     let
         entityMapper : Entity -> Entity
         entityMapper entity =
-            case Network.balanceFromEntity entity < config.epsilon of
+            case Network.balanceFromEntity entity < model.configuration.epsilon of
                 True ->
                     case entity.value.role of
                         Unemployed ->
                             entity
 
                         Shopkeeper ->
-                            Network.changeAccountBalanceOfEntity tick [ transfer.foodSold tick ] entity
+                            Network.changeAccountBalanceOfEntity tick [ (transfer model).foodSold tick ] entity
 
                 False ->
                     case entity.value.role of
                         Unemployed ->
-                            Network.changeAccountBalanceOfEntity tick [ transfer.foodBought tick ] entity
+                            Network.changeAccountBalanceOfEntity tick [ (transfer model).foodBought tick ] entity
 
                         Shopkeeper ->
-                            Network.changeAccountBalanceOfEntity tick [ transfer.foodSold tick ] entity
+                            Network.changeAccountBalanceOfEntity tick [ (transfer model).foodSold tick ] entity
     in
     Graph.mapNodes entityMapper g
 
@@ -690,7 +705,7 @@ recruiteNodesEtc model numbers =
 recruitMoreNodes_ model numbers =
     -- New recruitees recruit other nodes at random
     case
-        model.gameState == Phase1 && modBy config.gameCycleLength model.gameClock == config.recruitStep
+        model.gameState == Phase1 && modBy model.configuration.gameCycleLength model.gameClock == model.configuration.recruitStep
     of
         False ->
             ( 0, model.graph )
@@ -734,7 +749,7 @@ newGameState_ model =
 
 
 nextHistory_ model =
-    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy config.gameCycleLength model.gameClock == config.recruitStep) then
+    if model.gameState == Phase2 || (model.gameState == Phase1 && modBy model.configuration.gameCycleLength model.gameClock == model.configuration.recruitStep) then
         measures model :: model.history
 
     else
@@ -804,7 +819,7 @@ handleMouseClickInGrid model msg_ =
 
                     newGraph =
                         Network.setStatus index Recruited model.graph
-                            |> Network.changeAccountBalance model.gameClock index [ { expiration = config.expiration, currencyType = Complementary, issueTime = model.gameClock, amount = 10 } ]
+                            |> Network.changeAccountBalance model.gameClock index [ { expiration = model.configuration.expiration, currencyType = Complementary, issueTime = model.gameClock, amount = 10 } ]
                             -- xxx
                             |> Network.connect model.recruiter index
                             |> Network.incrementRecruitedCount model.recruiter
@@ -830,7 +845,7 @@ getRandomNumbers =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch [ simulationSubscription model, Time.every config.gameTimeInterval GameTick ]
+    Sub.batch [ simulationSubscription model, Time.every model.configuration.gameTimeInterval GameTick ]
 
 
 simulationSubscription : Model -> Sub Msg
@@ -872,10 +887,11 @@ onMouseClick nodeId =
 
 
 linkElement :
-    Graph (Force.Entity Int { value : NodeState }) e
+    Model
+    -> Graph (Force.Entity Int { value : NodeState }) e
     -> Edge EdgeLabel
     -> Svg msg
-linkElement graph edge =
+linkElement model graph edge =
     let
         source =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.from graph
@@ -884,7 +900,7 @@ linkElement graph edge =
             Maybe.withDefault (Force.entity 0 Network.defaultNodeState) <| Maybe.map (.node >> .label) <| Graph.get edge.to graph
 
         color =
-            if Network.absoluteEdgeFlow edge < config.epsilon then
+            if Network.absoluteEdgeFlow edge < model.configuration.epsilon then
                 Color.rgb255 255 255 255
 
             else
@@ -1040,7 +1056,7 @@ infoPanel model =
     column [ spacing 12, width (px 450), padding 40, Border.width 1 ]
         [ el [ alignTop ] (text "SIMULATION")
         , el [ Font.size 14 ] (text "Press 'Ready', then click on nodes to 'recruit' them.")
-        , row [ spacing 18 ] [ displayGraphButton model, displayGridButton model ]
+        , row [ spacing 18 ] [ displayGraphButton model, setCurrencyButton model ]
         ]
 
 
@@ -1349,7 +1365,7 @@ viewGraph model w h =
     svg [ viewBox 0 0 w h ]
         [ rect [ x 0, y 0, Apx.width w, Apx.height h ] []
         , Graph.edges model.graph
-            |> List.map (linkElement model.graph)
+            |> List.map (linkElement model model.graph)
             |> g [ class [ "links" ] ]
         , Graph.nodes model.graph
             |> List.map (nodeElement model)
@@ -1384,6 +1400,24 @@ displayGridButton model =
         { onPress = Just (SetDisplayMode DisplayGrid)
         , label = el [ Font.size 14 ] (text "Grid")
         }
+
+
+setCurrencyButton : Model -> Element Msg
+setCurrencyButton model =
+    Input.button (buttonStyle [ activeBackground (model.displayMode == DisplayGrid) ])
+        { onPress = Just ToggleCurrencyExpiration
+        , label = el [ Font.size 14 ] (text <| displayCurrencyType model)
+        }
+
+
+displayCurrencyType : Model -> String
+displayCurrencyType model =
+    case model.configuration.expiration of
+        Infinite ->
+            "Currency does not expire"
+
+        Finite k ->
+            "Currency expires after " ++ String.fromInt k ++ " ticks"
 
 
 startOverButton : Model -> Element Msg
