@@ -2,14 +2,15 @@ module Network exposing
     ( Network, SimpleNetwork, Entity, NodeState, EdgeLabel
     , Role(..), Status(..), defaultNodeState, influencees, influencees2, influencers
     , areConnected, connect, connectNodeToNodeInList
-    , balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+    , nodeStateFromNode, nodeState, nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
     , makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
-    , initializeNode, integerSequence
+    , initializeNode
     , computeForces
     , accountList
-    , absoluteEdgeFlow, getEdgeLabel, inComingNodeIds
+    , postTransactionToNetwork, absoluteEdgeFlow, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
     , hiddenTestGraph
-    , mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
+    , moneySupply
+    , randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
     )
 
 {-| The Network module defines a graph whose nodes represent
@@ -23,7 +24,7 @@ people and whose edges record financial transactions between nodes.
 
 @docs areConnected, connect, connectNodeToNodeInList
 
-@docs balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+@docs nodeStateFromNode, nodeState, nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
 
 @docs makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
 
@@ -33,9 +34,11 @@ people and whose edges record financial transactions between nodes.
 
 @docs accountList
 
-@docs absoluteEdgeFlow, getEdgeLabel, inComingNodeIds
+@docs postTransactionToNetwork, absoluteEdgeFlow, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
 
 @docs hiddenTestGraph
+
+@docs moneySupply
 
 -}
 
@@ -254,10 +257,10 @@ randomTransaction t mr1 mr2 amount graph =
 
         maybeNodeId1 : Maybe NodeId
         maybeNodeId1 =
-            randomListElement mr1 traders
+            Utility.randomListElement mr1 traders
 
         maybeNodeId2 =
-            randomListElement mr2 traders
+            Utility.randomListElement mr2 traders
     in
     if maybeNodeId1 == maybeNodeId2 then
         ( Nothing, graph )
@@ -305,20 +308,13 @@ zeroEdgeLabel =
     { transactions = [] }
 
 
-mintCurrency : CurrencyType -> Float -> Currency
-mintCurrency currencyType amount =
-    { amount = amount
-    , issueTime = 0
-    , expiration = Finite 50
-    , currencyType = currencyType
-    }
-
-
 
 -- REPORT: BALANCES, ETC
 
 
-nodeBalance : NodeId -> Graph Entity EdgeLabel -> Maybe Float
+{-| Return the balance of a node of given NodeId
+-}
+nodeBalance : NodeId -> Network -> Maybe Float
 nodeBalance i g =
     g
         |> Graph.nodes
@@ -385,6 +381,8 @@ netTransactionAmountOfEdge e =
     netTransactionAmountOfEdgeLabel e.label
 
 
+{-| Retun the total transaction amount stored in an EdgeLabel
+-}
 netTransactionAmountOfEdgeLabel : EdgeLabel -> Float
 netTransactionAmountOfEdgeLabel label =
     label.transactions
@@ -396,7 +394,9 @@ netTransactionAmountOfEdgeLabel label =
 -- POST TRANSACTIONS,
 
 
-postTransactionToNetwork : BankTime -> NodeId -> NodeId -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Post the given transaction to the network om the edge joining one node to the other
+-}
+postTransactionToNetwork : BankTime -> NodeId -> NodeId -> Transaction -> Network -> Network
 postTransactionToNetwork t n1 n2 transaction g =
     Graph.mapContexts (postTransactionToContext t n1 n2 transaction) g
 
@@ -498,11 +498,15 @@ getEdgeLabel n1 n2 g =
                     Nothing
 
 
+{-| Return the NodeState of a Node Entity
+-}
 nodeStateFromNode : Node Entity -> NodeState
 nodeStateFromNode node =
     node.label.value
 
 
+{-| Return the NodeState of an Entity
+-}
 nodeState : Entity -> NodeState
 nodeState entity =
     entity.value
@@ -517,21 +521,6 @@ nodeState entity =
 distributeLocations : Graph Entity EdgeLabel -> Graph Entity EdgeLabel
 distributeLocations graph =
     Graph.mapNodes (\node -> node) graph
-
-
-{-| Create a sequence of integers of length n given a modulus and seed
--}
-integerSequence : Int -> Int -> Int -> List Int
-integerSequence modulus n seed =
-    PseudoRandom.floatSequence n seed ( 0, 1 )
-        |> List.map (\x -> round (toFloat modulus * x))
-        |> List.Extra.unique
-        |> List.filter (\x -> x < modulus)
-
-
-randomPairs : Int -> Int -> Int -> List ( Int, Int )
-randomPairs modulus n seed =
-    List.map2 Tuple.pair (integerSequence modulus n seed) (integerSequence modulus n (seed * seed))
 
 
 setNodeState : GraphId -> Role -> Status -> String -> ( Int, Int ) -> NodeState
@@ -822,6 +811,8 @@ newContext2 from to graph =
 --
 
 
+{-| Return a list of the nodes pointed to by the given node
+-}
 outGoingNodeIds : NodeId -> Graph n e -> List NodeId
 outGoingNodeIds nodeId graph =
     case Graph.get nodeId graph of
@@ -881,28 +872,6 @@ influencees2b nodeId graph =
     influencers nodeId graph ++ influencees2 nodeId graph
 
 
-scale : Float -> Int -> Int
-scale x n =
-    round (x * toFloat n)
-
-
-randomListElement : Maybe Float -> List a -> Maybe a
-randomListElement maybeRandomNumber list =
-    case maybeRandomNumber of
-        Nothing ->
-            Nothing
-
-        Just rn ->
-            let
-                n =
-                    List.length list
-
-                i =
-                    scale rn (n - 1)
-            in
-            List.Extra.getAt i list
-
-
 {-| Return the list of nodes of graph that are not in
 the nodeExclusionList
 -}
@@ -931,7 +900,7 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
         randomInfluenceeNodeId : Maybe NodeId
         randomInfluenceeNodeId =
             influencees recruiterNode currentGraph
-                |> randomListElement (List.Extra.getAt 0 rnList)
+                |> Utility.randomListElement (List.Extra.getAt 0 rnList)
 
         secondOrderInfluencees : List NodeId
         secondOrderInfluencees =
@@ -940,7 +909,7 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
         randomSecondOrderInfluenceeNodeId : Maybe NodeId
         randomSecondOrderInfluenceeNodeId =
             secondOrderInfluencees
-                |> randomListElement (List.Extra.getAt 0 rnList)
+                |> Utility.randomListElement (List.Extra.getAt 0 rnList)
     in
     case randomSecondOrderInfluenceeNodeId of
         Nothing ->
@@ -966,7 +935,7 @@ recruitRandomFreeNode numbers recruiter graph =
             List.Extra.getAt 2 numbers
 
         freeNode =
-            randomListElement rn2 freeNodes
+            Utility.randomListElement rn2 freeNodes
     in
     case freeNode of
         Nothing ->
@@ -1000,7 +969,7 @@ recruitRandom numbers designatedRecruiter graph =
             List.map (\n -> ( n.id, n.label.value.numberRecruited )) influenceeNodes
 
         recruiter =
-            randomListElement rn2 influenceeNodes
+            Utility.randomListElement rn2 influenceeNodes
                 |> Maybe.map (\n -> n.id)
 
         freeNodes =
@@ -1012,7 +981,7 @@ recruitRandom numbers designatedRecruiter graph =
             List.Extra.getAt 3 numbers
 
         freeNode =
-            randomListElement rn3 freeNodes
+            Utility.randomListElement rn3 freeNodes
     in
     case ( recruiter, freeNode ) of
         ( Just recruiterNodeId, Just recruiteeNodeId ) ->
@@ -1070,7 +1039,9 @@ alterLink ( from, to ) =
     }
 
 
-moneySupply : Graph Entity EdgeLabel -> Float
+{-| Return the total money supply in the network
+-}
+moneySupply : Network -> Float
 moneySupply graph =
     graph
         |> Graph.nodes
