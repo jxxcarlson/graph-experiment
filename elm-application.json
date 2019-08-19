@@ -1,0 +1,8 @@
+{
+    "name": "jxxcarlson/network-simulator",
+    "summary": "Network simulator",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Currency", "Network"
+    ]
+}

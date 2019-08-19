@@ -1,42 +1,84 @@
 module Network exposing
     ( Network, SimpleNetwork, Entity, NodeState, EdgeLabel
-    , Role(..), Status(..), defaultNodeState, influencees, influencees2, influencers
+    , Role(..), Status(..), defaultNodeState, setStatus, influencees, influencees2, influencers
     , areConnected, connect, connectNodeToNodeInList
-    , nodeStateFromNode, nodeState, nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
-    , makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
-    , initializeNode
+    , nodeStateFromNode, nodeState
+    , nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+    , creditNode, debitNode, makeTransaction, postTransactionToNetwork, randomTransaction
+    , changeAccountBalance, changeAccountBalanceOfEntity, accountList
+    , filterNodes, incrementRecruitedCount, updateContextWithValue
+    , initializeNode, recruitNodes, recruitRandom
     , computeForces
-    , accountList
-    , postTransactionToNetwork, absoluteEdgeFlow, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
-    , hiddenTestGraph
+    , absoluteEdgeFlow, removeExpiredCurrencyFromEdges, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
+    , hiddenTestGraph, setupGraph, simplifyGraph, testGraph
     , moneySupply
-    , randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
     )
 
 {-| The Network module defines a graph whose nodes represent
 people and whose edges record financial transactions between nodes.
 
+
+# Types
+
 @docs Network, SimpleNetwork, Entity, NodeState, EdgeLabel
 
--- NODES
 
-@docs Role, Status, defaultNodeState, influencees, influencees2, influencers
+# Nodes
+
+@docs Role, Status, defaultNodeState, setStatus, influencees, influencees2, influencers
+
+
+# Connecting Nodes
 
 @docs areConnected, connect, connectNodeToNodeInList
 
-@docs nodeStateFromNode, nodeState, nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
 
-@docs makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
+# Node State
 
-@docs initializeNode, integerSequence
+@docs nodeStateFromNode, nodeState
+
+
+# Balances
+
+@docs nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+
+
+# Transactions
+
+@docs creditNode, debitNode, makeTransaction, postTransactionToNetwork, randomTransaction
+
+
+# Accounts
+
+@docs changeAccountBalance, changeAccountBalanceOfEntity, accountList
+
+
+# Unclassified
+
+@docs filterNodes, incrementRecruitedCount, updateContextWithValue
+
+
+# Recruitment
+
+@docs initializeNode, recruitNodes, recruitRandom
+
+
+# Forces
 
 @docs computeForces
 
-@docs accountList
 
-@docs postTransactionToNetwork, absoluteEdgeFlow, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
+# Edges
 
-@docs hiddenTestGraph
+@docs absoluteEdgeFlow, removeExpiredCurrencyFromEdges, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
+
+
+# Graphs
+
+@docs hiddenTestGraph, setupGraph, simplifyGraph, testGraph
+
+
+# Money
 
 @docs moneySupply
 
@@ -125,12 +167,16 @@ type alias SimpleNetwork =
 -- TRANSFORM GRAPH --
 
 
-simplifyGraph : Graph Entity EdgeLabel -> Graph NodeState EdgeLabel
+{-| Reduce a Network to a SimpleNetwork
+-}
+simplifyGraph : Network -> SimpleNetwork
 simplifyGraph g =
     Graph.mapNodes (\n -> n.value) g
 
 
-removeExpiredCurrencyFromEdges : BankTime -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Remove expired currency from the edges of the graph
+-}
+removeExpiredCurrencyFromEdges : BankTime -> Network -> Network
 removeExpiredCurrencyFromEdges bt g =
     let
         edgeTransformer : EdgeLabel -> EdgeLabel
@@ -142,17 +188,7 @@ removeExpiredCurrencyFromEdges bt g =
 
 
 -- FILTER GRAPH --
-
-
-filterNodesOnState : (NodeState -> Bool) -> Graph Entity EdgeLabel -> List (Node Entity)
-filterNodesOnState filterNodeState graph =
-    let
-        filterNode : Node Entity -> Bool
-        filterNode node =
-            node.label |> nodeState |> filterNodeState
-    in
-    Graph.nodes graph
-        |> List.filter filterNode
+--
 
 
 {-| Return a list of nodes of the
@@ -248,7 +284,11 @@ creditNode t nodeId_ incoming graph =
         graph
 
 
-randomTransaction : BankTime -> Maybe Float -> Maybe Float -> Float -> Graph Entity EdgeLabel -> ( Maybe ( NodeId, NodeId ), Graph Entity EdgeLabel )
+{-| Use Maybe random floasts to make a random transfer in the given amount.
+Return a pair consistng of the nodes between which the transaction is
+made and the updated network.
+-}
+randomTransaction : BankTime -> Maybe Float -> Maybe Float -> Float -> Network -> ( Maybe ( NodeId, NodeId ), Network )
 randomTransaction t mr1 mr2 amount graph =
     let
         traders =
@@ -332,6 +372,8 @@ balanceFromNodeState ns =
         |> List.sum
 
 
+{-| Return the account balance of a simle node
+-}
 balanceFromSimpleNode : Node NodeState -> Float
 balanceFromSimpleNode node =
     balanceFromNodeState node.label
@@ -358,15 +400,7 @@ accountFromNode node =
 
 
 -- FLOWS AND OTHER MEASURES ALONG AN EDGE
-
-
-showEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
-showEdgeLabel i j g =
-    g
-        |> Graph.edges
-        |> List.filter (\e -> e.from == i && e.to == j)
-        |> List.head
-        |> Maybe.map (\e -> e.label)
+--
 
 
 {-| The sum of the transactions along an edge.
@@ -554,6 +588,7 @@ testNodes =
 
 {-| Used to initialize the model
 -}
+hiddenTestGraph : SimpleNetwork
 hiddenTestGraph =
     Graph.fromNodesAndEdges
         testNodes
@@ -572,6 +607,7 @@ hiddenTestGraph =
 
 {-| Used to initialize the model
 -}
+testGraph : SimpleNetwork
 testGraph =
     Graph.fromNodesAndEdges
         testNodes
@@ -580,6 +616,7 @@ testGraph =
 
 {-| Use this as a starting point for modifications
 -}
+defaultNodeState : NodeState
 defaultNodeState =
     { name = "", status = NotRecruited, role = Unemployed, accountBalance = [], parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
@@ -595,9 +632,9 @@ initializeNode ctx =
     }
 
 
-setupGraph :
-    Graph.Graph NodeState EdgeLabel
-    -> ( List (Force.Force Int), Graph.Graph Entity EdgeLabel )
+{-| Set up a newtwork from a simple network
+-}
+setupGraph : SimpleNetwork -> ( List (Force.Force Int), Network )
 setupGraph inputGraph =
     let
         outputGraph =
@@ -641,7 +678,9 @@ reheatGraph inputGraph =
 --
 
 
-setStatus : Int -> Status -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Set the status of the given node in the given network
+-}
+setStatus : Int -> Status -> Network -> Network
 setStatus nodeIndex status graph =
     -- xxx : NOTE improve code
     Graph.mapNodes
@@ -707,6 +746,8 @@ changeAccountBalanceOfEntity t incoming entity =
     { entity | value = newValue }
 
 
+{-| Update the label of a node in a nodecontext (Poor documentation XXX)
+-}
 updateContextWithValue : NodeContext Entity EdgeLabel -> Entity -> NodeContext Entity EdgeLabel
 updateContextWithValue nodeCtx value =
     let
@@ -722,6 +763,8 @@ updateContextWithValue nodeCtx value =
 --
 
 
+{-| Connect one node to another
+-}
 connect : NodeId -> NodeId -> Graph n EdgeLabel -> Graph n EdgeLabel
 connect from to graph =
     case newContext from to graph of
@@ -893,7 +936,13 @@ filterNotGraph graph filter =
 --
 
 
-recruitNodes : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Use the list of random numbers and the node to choose a
+random influencee of the recuiter node. This is the
+randomInfluenceeNodeId. Then find influencees of that node in
+the hidden graph. Choose a radnodm element of that list.
+Connect that node to the recuiter id (XXX???)
+-}
+recruitNodes : List Float -> NodeId -> Network -> Network -> Network
 recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
     let
         -- random influencee of recruiterNode
@@ -920,37 +969,10 @@ recruitNodes rnList recruiterNode currentGraph hiddenGraph_ =
                 |> setStatus newNodeId Recruited
 
 
-{-| The recruiter recruits a free node at random
--}
-recruitRandomFreeNode : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-recruitRandomFreeNode numbers recruiter graph =
-    let
-        freeNodes : List NodeId
-        freeNodes =
-            nodeComplementOfGraph graph
-                (influencees recruiter graph ++ [ recruiter ])
-                |> List.map (\n -> n.id)
-
-        rn2 =
-            List.Extra.getAt 2 numbers
-
-        freeNode =
-            Utility.randomListElement rn2 freeNodes
-    in
-    case freeNode of
-        Nothing ->
-            graph
-
-        Just nodeId_ ->
-            connect recruiter nodeId_ graph
-                |> setStatus nodeId_ Recruited
-                |> incrementRecruitedCount recruiter
-
-
 {-| A random influencee whose recruitedCount is 0 or 1
 recruits a free node at random.
 -}
-recruitRandom : List Float -> NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+recruitRandom : List Float -> NodeId -> Network -> Network
 recruitRandom numbers designatedRecruiter graph =
     let
         rn2 =
