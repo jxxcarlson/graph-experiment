@@ -1,62 +1,14 @@
 module Network exposing
-    ( EdgeLabel
-    , Entity
-    , NodeState
-    , Role(..)
-    , SimpleGraph
-    , Status(..)
-    , absoluteEdgeFlow
-    , accountList
-    , areConnected
-    , balanceFromEntity
-    , balanceFromNode
-    , balanceFromNodeState
-    , balanceFromSimpleNode
-    , changeAccountBalance
-    , changeAccountBalanceOfEntity
-    , changeEdgeLabel
-    , computeForces
-    , connect
-    , connectNodeToNodeInList
-    , creditNode
-    , debitNode
-    , defaultNodeState
-    , filterNodes
-    , getEdgeLabel
-    , hiddenTestGraph
-    , inComingNodeIds
-    , incrementRecruitedCount
-    , influencees
-    , influencees2
-    , influencers
-    , initializeNode
-    , integerSequence
-    , makeTransaction
-    , mintCurrency
-    , moneySupply
-    , netTransactionAmountOfEdgeLabel
-    , nodeBalance
-    , nodeState
-    , nodeStateFromNode
-    , outGoingNodeIds
-    , postTransactionToContext
-    , postTransactionToNetwork
-    , randomListElement
-    , randomPairs
-    , randomTransaction
-    , recruitNodes
-    , recruitRandom
-    , recruitRandomFreeNode
-    , reheatGraph
-    , removeExpiredCurrencyFromEdges
-    , setStatus
-    , setupGraph
-    , showEdgeLabel
-    , simplifyGraph
-    , testGraph
-    , updateContextWithValue
-    , zeroEdgeLabel
+    ( Network, SimpleNetwork, Entity, NodeState, EdgeLabel
+    , Role(..), Status(..), absoluteEdgeFlow, accountList, areConnected, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode, changeAccountBalance, changeAccountBalanceOfEntity, changeEdgeLabel, computeForces, connect, connectNodeToNodeInList, creditNode, debitNode, defaultNodeState, filterNodes, getEdgeLabel, hiddenTestGraph, inComingNodeIds, incrementRecruitedCount, influencees, influencees2, influencers, initializeNode, integerSequence, makeTransaction, mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
     )
+
+{-| The Network module defines a graph whose nodes represent
+people and whose edges record financial transactions between nodes.
+
+@docs Network, SimpleNetwork, Entity, NodeState, EdgeLabel
+
+-}
 
 import Currency exposing (BankTime, Currency, CurrencyType(..), Expiration(..))
 import Force exposing (State)
@@ -73,41 +25,25 @@ import Utility
 --
 
 
-type alias Entity =
-    Force.Entity NodeId { value : NodeState }
-
-
-type alias SimpleGraph =
-    Graph NodeState EdgeLabel
-
-
-type alias EdgeLabel =
-    { transactions : List Currency
-    }
-
-
+{-| Network is the main type of this module.
+-}
 type alias Network =
     Graph Entity EdgeLabel
 
 
-type alias NetworkEdge =
-    Edge EdgeLabel
+{-| Entity is the main node type. Force.Entity is the
+Force type which is used for display the graph by
+giving each node a repulsive charge. NodeId is an Int.
+The record {value : NodeState} holds other information,
+such as the name of the node, its account balance, etc.
+-}
+type alias Entity =
+    Force.Entity NodeId { value : NodeState }
 
 
-type Status
-    = Recruited
-    | NotRecruited
-
-
-type Role
-    = Shopkeeper
-    | Unemployed
-
-
-type alias GraphId =
-    Int
-
-
+{-| NodeState carries information about the node:
+name, accountBalance, etc.
+-}
 type alias NodeState =
     { name : String
     , status : Status
@@ -117,6 +53,40 @@ type alias NodeState =
     , numberRecruited : Int
     , location : ( Int, Int )
     }
+
+
+{-| Nodes can recruit one another.
+-}
+type Status
+    = Recruited
+    | NotRecruited
+
+
+{-| The role that a node/person plays n the artificial micoeconomy
+-}
+type Role
+    = Shopkeeper
+    | Unemployed
+
+
+{-| Alias for the integer referfinng to the id of graph.
+-}
+type alias GraphId =
+    Int
+
+
+{-| EdgeLabel contains a record of transations
+-}
+type alias EdgeLabel =
+    { transactions : List Currency
+    }
+
+
+{-| SimpleNetwork is a simplified graph in which the Force information is discarded.
+The type of its nodes is parametrized by NodeState, the type of its edges by EdgeLabel
+-}
+type alias SimpleNetwork =
+    Graph NodeState EdgeLabel
 
 
 

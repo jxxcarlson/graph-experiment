@@ -12,7 +12,7 @@ module NetworkMeasure exposing
 
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
-import Network exposing (EdgeLabel, NodeState, SimpleGraph)
+import Network exposing (EdgeLabel, NodeState, SimpleNetwork)
 import Utility
 
 
@@ -30,7 +30,7 @@ delta =
     0.0
 
 
-accountBalances : SimpleGraph -> List Float
+accountBalances : SimpleNetwork -> List Float
 accountBalances g =
     g
         |> Graph.nodes
@@ -38,7 +38,7 @@ accountBalances g =
 
 
 
--- giniIndex : SimpleGraph -> Float
+-- giniIndex : SimpleNetwork -> Float
 
 
 giniIndex g =
@@ -110,7 +110,7 @@ transformIncoming ctx =
         ctx
 
 
-outflowFromNode : NodeId -> SimpleGraph -> Float
+outflowFromNode : NodeId -> SimpleNetwork -> Float
 outflowFromNode nodeId g =
     case Graph.get nodeId g of
         Nothing ->
@@ -120,7 +120,7 @@ outflowFromNode nodeId g =
             edgeFlow ctx.outgoing |> abs
 
 
-inflowToNode : NodeId -> SimpleGraph -> Float
+inflowToNode : NodeId -> SimpleNetwork -> Float
 inflowToNode nodeId g =
     case Graph.get nodeId g of
         Nothing ->
@@ -130,7 +130,7 @@ inflowToNode nodeId g =
             edgeFlow ctx.incoming |> abs
 
 
-totalFlow : SimpleGraph -> Float
+totalFlow : SimpleNetwork -> Float
 totalFlow g =
     g
         |> Graph.edges
@@ -145,7 +145,7 @@ edgeFlow intDict =
         |> List.sum
 
 
-efficiencyOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
+efficiencyOfEdge : Float -> SimpleNetwork -> Edge EdgeLabel -> Float
 efficiencyOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
@@ -169,7 +169,7 @@ efficiencyOfEdge totalFlow_ g edge =
             Utility.roundTo 3 (edgeFlow_ * logRatio)
 
 
-resilienceOfEdge : Float -> SimpleGraph -> Edge EdgeLabel -> Float
+resilienceOfEdge : Float -> SimpleNetwork -> Edge EdgeLabel -> Float
 resilienceOfEdge totalFlow_ g edge =
     let
         edgeFlow_ =
@@ -193,7 +193,7 @@ resilienceOfEdge totalFlow_ g edge =
             edgeFlow_ * logRatio
 
 
-efficiency : SimpleGraph -> Float
+efficiency : SimpleNetwork -> Float
 efficiency g =
     let
         totalFlow_ =
@@ -204,7 +204,7 @@ efficiency g =
         |> (\x -> Utility.roundTo 3 x)
 
 
-resilience : SimpleGraph -> Float
+resilience : SimpleNetwork -> Float
 resilience g =
     let
         totalFlow_ =
@@ -215,7 +215,7 @@ resilience g =
         |> (\x -> -(Utility.roundTo 3 x))
 
 
-alpha : SimpleGraph -> Float
+alpha : SimpleNetwork -> Float
 alpha g =
     let
         eff =
@@ -232,7 +232,7 @@ alpha g =
         1 / ratio
 
 
-sustainability : SimpleGraph -> Float
+sustainability : SimpleNetwork -> Float
 sustainability g =
     let
         a =
@@ -248,6 +248,6 @@ sustainability g =
         -1.844 * aa * logBase 2 aa
 
 
-sustainabilityPercentage : SimpleGraph -> Float
+sustainabilityPercentage : SimpleNetwork -> Float
 sustainabilityPercentage g =
     Utility.roundTo 2 (100 * sustainability g)
