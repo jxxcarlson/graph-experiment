@@ -1,13 +1,15 @@
 module Network exposing
     ( Network, SimpleNetwork, Entity, NodeState, EdgeLabel
-    , Role(..), Status(..)
+    , Role(..), Status(..), defaultNodeState, influencees, influencees2, influencers
     , areConnected, connect, connectNodeToNodeInList
     , balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
-    , changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode
+    , makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
+    , initializeNode, integerSequence
     , computeForces
     , accountList
-    , absoluteEdgeFlow
-    , defaultNodeState, filterNodes, getEdgeLabel, hiddenTestGraph, inComingNodeIds, incrementRecruitedCount, influencees, influencees2, influencers, initializeNode, integerSequence, makeTransaction, mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
+    , absoluteEdgeFlow, getEdgeLabel, inComingNodeIds
+    , hiddenTestGraph
+    , mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
     )
 
 {-| The Network module defines a graph whose nodes represent
@@ -15,19 +17,25 @@ people and whose edges record financial transactions between nodes.
 
 @docs Network, SimpleNetwork, Entity, NodeState, EdgeLabel
 
-@docs Role, Status
+-- NODES
+
+@docs Role, Status, defaultNodeState, influencees, influencees2, influencers
 
 @docs areConnected, connect, connectNodeToNodeInList
 
 @docs balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
 
-@docs changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode
+@docs makeTransaction, changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode, filterNodes, incrementRecruitedCount
+
+@docs initializeNode, integerSequence
 
 @docs computeForces
 
 @docs accountList
 
-@docs absoluteEdgeFlow
+@docs absoluteEdgeFlow, getEdgeLabel, inComingNodeIds
+
+@docs hiddenTestGraph
 
 -}
 
@@ -144,7 +152,10 @@ filterNodesOnState filterNodeState graph =
         |> List.filter filterNode
 
 
-filterNodes : (Entity -> Bool) -> Graph Entity EdgeLabel -> List (Node Entity)
+{-| Return a list of nodes of the
+given network that satisfy the given predicate
+-}
+filterNodes : (Entity -> Bool) -> Network -> List (Node Entity)
 filterNodes filterNode_ graph =
     let
         filterNode : Node Entity -> Bool
@@ -262,7 +273,9 @@ randomTransaction t mr1 mr2 amount graph =
                 ( Nothing, graph )
 
 
-makeTransaction : BankTime -> Int -> Int -> Float -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Transfer a given enount from node i to node j
+-}
+makeTransaction : BankTime -> Int -> Int -> Float -> Network -> Network
 makeTransaction currentBankTime i j amount graph =
     case Graph.get i graph of
         Nothing ->
@@ -465,7 +478,9 @@ stringFromExpiration exp =
             String.fromInt t
 
 
-getEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
+{-| Return a Maybe EdgeLabel corresponding to the given node ids
+-}
+getEdgeLabel : NodeId -> NodeId -> Network -> Maybe EdgeLabel
 getEdgeLabel n1 n2 g =
     case Graph.get n1 g of
         Nothing ->
@@ -504,6 +519,8 @@ distributeLocations graph =
     Graph.mapNodes (\node -> node) graph
 
 
+{-| Create a sequence of integers of length n given a modulus and seed
+-}
 integerSequence : Int -> Int -> Int -> List Int
 integerSequence modulus n seed =
     PseudoRandom.floatSequence n seed ( 0, 1 )
@@ -527,6 +544,8 @@ makeEdge ( from, to ) =
     { from = from, to = to, label = zeroEdgeLabel }
 
 
+{-| Used to initialize the model
+-}
 testNodes =
     [ Node 0 (setNodeState 0 Shopkeeper NotRecruited "p0" ( 10, 18 ))
     , Node 1 (setNodeState 0 Unemployed NotRecruited "p1" ( 16, 15 ))
@@ -544,6 +563,8 @@ testNodes =
     ]
 
 
+{-| Used to initialize the model
+-}
 hiddenTestGraph =
     Graph.fromNodesAndEdges
         testNodes
@@ -560,16 +581,23 @@ hiddenTestGraph =
         ]
 
 
+{-| Used to initialize the model
+-}
 testGraph =
     Graph.fromNodesAndEdges
         testNodes
         []
 
 
+{-| Use this as a starting point for modifications
+-}
 defaultNodeState =
     { name = "", status = NotRecruited, role = Unemployed, accountBalance = [], parentGraphId = 0, numberRecruited = 0, location = ( 0, 0 ) }
 
 
+{-| Badly named. Create NodeContext Entity EdgeLabel from NodeContext NodeState EdgeLabel.
+What does it do, how is it used?
+-}
 initializeNode : NodeContext NodeState EdgeLabel -> NodeContext Entity EdgeLabel
 initializeNode ctx =
     { node = { label = Force.entity ctx.node.id ctx.node.label, id = ctx.node.id }
@@ -745,7 +773,9 @@ areConnected n1 n2 g =
     g |> Graph.edges |> List.foldl folder False
 
 
-incrementRecruitedCount : NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Increment the count of nodes recruited by the tiven node.
+-}
+incrementRecruitedCount : NodeId -> Network -> Network
 incrementRecruitedCount nodeId graph =
     -- xxx NOTE: improve code!
     Graph.mapNodes
@@ -802,6 +832,8 @@ outGoingNodeIds nodeId graph =
             ctx.outgoing |> IntDict.keys
 
 
+{-| List of nodes pointing to a give node
+-}
 inComingNodeIds : NodeId -> Graph n e -> List NodeId
 inComingNodeIds nodeId graph =
     case Graph.get nodeId graph of
