@@ -1,6 +1,13 @@
 module Network exposing
     ( Network, SimpleNetwork, Entity, NodeState, EdgeLabel
-    , Role(..), Status(..), absoluteEdgeFlow, accountList, areConnected, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode, changeAccountBalance, changeAccountBalanceOfEntity, changeEdgeLabel, computeForces, connect, connectNodeToNodeInList, creditNode, debitNode, defaultNodeState, filterNodes, getEdgeLabel, hiddenTestGraph, inComingNodeIds, incrementRecruitedCount, influencees, influencees2, influencers, initializeNode, integerSequence, makeTransaction, mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
+    , Role(..), Status(..)
+    , areConnected, connect, connectNodeToNodeInList
+    , balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+    , changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode
+    , computeForces
+    , accountList
+    , absoluteEdgeFlow
+    , defaultNodeState, filterNodes, getEdgeLabel, hiddenTestGraph, inComingNodeIds, incrementRecruitedCount, influencees, influencees2, influencers, initializeNode, integerSequence, makeTransaction, mintCurrency, moneySupply, netTransactionAmountOfEdgeLabel, nodeBalance, nodeState, nodeStateFromNode, outGoingNodeIds, postTransactionToContext, postTransactionToNetwork, randomListElement, randomPairs, randomTransaction, recruitNodes, recruitRandom, recruitRandomFreeNode, reheatGraph, removeExpiredCurrencyFromEdges, setStatus, setupGraph, showEdgeLabel, simplifyGraph, testGraph, updateContextWithValue, zeroEdgeLabel
     )
 
 {-| The Network module defines a graph whose nodes represent
@@ -8,9 +15,23 @@ people and whose edges record financial transactions between nodes.
 
 @docs Network, SimpleNetwork, Entity, NodeState, EdgeLabel
 
+@docs Role, Status
+
+@docs areConnected, connect, connectNodeToNodeInList
+
+@docs balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
+
+@docs changeAccountBalance, changeAccountBalanceOfEntity, creditNode, debitNode
+
+@docs computeForces
+
+@docs accountList
+
+@docs absoluteEdgeFlow
+
 -}
 
-import Currency exposing (BankTime, Currency, CurrencyType(..), Expiration(..))
+import Currency exposing (BankTime, Currency, CurrencyType(..), Expiration(..), Transaction)
 import Force exposing (State)
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
 import IntDict exposing (IntDict)
@@ -140,14 +161,18 @@ filterNodes filterNode_ graph =
 --
 
 
-accountList : Graph Entity EdgeLabel -> List ( NodeId, Float )
+{-| accountList g => List of piars (NodeId, Account Balance)
+-}
+accountList : Network -> List ( NodeId, Float )
 accountList graph =
     graph
         |> Graph.nodes
         |> List.map (\n -> ( n.id, balanceFromNodeState n.label.value ))
 
 
-activeTraders : Graph Entity EdgeLabel -> List (Node Entity)
+{-| Produce list of nodes with positive account balances
+-}
+activeTraders : Network -> List (Node Entity)
 activeTraders graph =
     let
         nodeFilter : Entity -> Bool
@@ -157,7 +182,9 @@ activeTraders graph =
     filterNodes nodeFilter graph
 
 
-debitNode : BankTime -> NodeId -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| debit the given node
+-}
+debitNode : BankTime -> NodeId -> Transaction -> Network -> Network
 debitNode t nodeId_ incoming graph =
     -- xxx NOTE: improve code
     Graph.mapNodes
@@ -181,7 +208,9 @@ debitNode t nodeId_ incoming graph =
         graph
 
 
-creditNode : BankTime -> NodeId -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| credit the given node with the given transactin
+-}
+creditNode : BankTime -> NodeId -> Transaction -> Network -> Network
 creditNode t nodeId_ incoming graph =
     -- xxx NOTE: improve code!
     Graph.mapNodes
@@ -285,6 +314,8 @@ nodeBalance i g =
         |> Maybe.map (\n -> balanceFromNodeState n.label.value)
 
 
+{-| Gice the account blance of a NodeState
+-}
 balanceFromNodeState : NodeState -> Float
 balanceFromNodeState ns =
     ns.accountBalance
@@ -297,11 +328,15 @@ balanceFromSimpleNode node =
     balanceFromNodeState node.label
 
 
+{-| Give the account balance of a node
+-}
 balanceFromNode : Node Entity -> Float
 balanceFromNode node =
     balanceFromNodeState node.label.value
 
 
+{-| Give the account balance of an entity
+-}
 balanceFromEntity : Entity -> Float
 balanceFromEntity ent =
     balanceFromNodeState ent.value
@@ -325,6 +360,8 @@ showEdgeLabel i j g =
         |> Maybe.map (\e -> e.label)
 
 
+{-| The sum of the transactions along an edge.
+-}
 absoluteEdgeFlow : Edge EdgeLabel -> Float
 absoluteEdgeFlow e =
     abs (netTransactionAmountOfEdge e)
@@ -426,15 +463,6 @@ stringFromExpiration exp =
 
         Finite t ->
             String.fromInt t
-
-
-
--- XXX - MARKERS UP TO HERE
-
-
-changeEdgeLabel : EdgeLabel -> NodeId -> NodeId -> Edge EdgeLabel -> Edge EdgeLabel
-changeEdgeLabel edgeLabel n1_ n2_ e =
-    e
 
 
 getEdgeLabel : NodeId -> NodeId -> Graph Entity EdgeLabel -> Maybe EdgeLabel
@@ -620,12 +648,14 @@ setStatus nodeIndex status graph =
         graph
 
 
-changeAccountBalance : BankTime -> Int -> List Currency -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
-changeAccountBalance t nodeIndex incoming graph =
+{-| Change the account balance of a node with given id
+-}
+changeAccountBalance : BankTime -> Int -> List Currency -> Network -> Network
+changeAccountBalance t nodeId incoming graph =
     -- xxx NOTE: improve code!
     Graph.mapNodes
         (\n ->
-            if n.id == nodeIndex then
+            if n.id == nodeId then
                 { n
                     | value =
                         { name = n.value.name
@@ -644,6 +674,8 @@ changeAccountBalance t nodeIndex incoming graph =
         graph
 
 
+{-| Change the account balance of an Entity
+-}
 changeAccountBalanceOfEntity : BankTime -> List Currency -> Entity -> Entity
 changeAccountBalanceOfEntity t incoming entity =
     let
@@ -697,6 +729,8 @@ connectIf from to graph =
                 Graph.insert ctx graph
 
 
+{-| areConnected i j g = True iff nodes i and are connected in graph g
+-}
 areConnected : NodeId -> NodeId -> Graph n e -> Bool
 areConnected n1 n2 g =
     let
@@ -735,7 +769,9 @@ incrementRecruitedCount nodeId graph =
         graph
 
 
-connectNodeToNodeInList : NodeId -> List NodeId -> Graph Entity EdgeLabel -> Graph Entity EdgeLabel
+{-| Connect the node "from" to all the nodes in "nodeList"
+-}
+connectNodeToNodeInList : NodeId -> List NodeId -> Network -> Network
 connectNodeToNodeInList from nodeList graph =
     List.foldl (\to graph_ -> connect from to graph_ |> setStatus to Recruited) graph nodeList
 
@@ -976,6 +1012,9 @@ consIfDefined maybeValue list =
 -- FORCES --
 
 
+{-| This functions determines how the nodes will arrange themselves
+according to the repulsive forces they experience.
+-}
 computeForces : Graph.Graph n e -> List (Force.Force Int)
 computeForces graph =
     let
