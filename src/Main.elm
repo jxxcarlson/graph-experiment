@@ -1,4 +1,4 @@
-port module NetworkSimulator exposing (Msg(..), cellRenderer, main, stringForGraphEdges)
+port module Main exposing (Msg(..), cellRenderer, main, stringForGraphEdges)
 
 {-| This demonstrates laying out the characters in Les Miserables
 based on their co-occurence in a scene. Try dragging the nodes!
