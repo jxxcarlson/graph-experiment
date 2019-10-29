@@ -1,4 +1,4 @@
-module TestCurrency exposing (acct, c1, c2, c3, m1, m2, suite)
+module CurrencyTest exposing (acct, c1, c2, c3, m1, m2, suite)
 
 import Currency exposing (..)
 import Expect exposing (Expectation)

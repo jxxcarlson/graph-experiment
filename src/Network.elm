@@ -3,11 +3,13 @@ module Network exposing
     , Role(..), Status(..), defaultNodeState, setStatus, influencees, influencees2, influencers
     , areConnected, connect, connectNodeToNodeInList
     , nodeStateFromNode, nodeState
+    , makeEdge
     , nodeBalance, balanceFromEntity, balanceFromNode, balanceFromNodeState, balanceFromSimpleNode
     , creditNode, debitNode, makeTransaction, postTransactionToNetwork, randomTransaction
     , changeAccountBalance, changeAccountBalanceOfEntity, accountList
     , filterNodes, incrementRecruitedCount, updateContextWithValue
     , initializeNode, recruitNodes, recruitRandom
+    , setNodeState
     , computeForces
     , absoluteEdgeFlow, removeExpiredCurrencyFromEdges, netTransactionAmountOfEdgeLabel, getEdgeLabel, inComingNodeIds, outGoingNodeIds
     , hiddenTestGraph, setupGraph, simplifyGraph, testGraph

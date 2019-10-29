@@ -8,6 +8,7 @@ module NetworkMeasure exposing
     , sustainability
     , sustainabilityPercentage
     , totalFlow
+    , flowList
     )
 
 import Graph exposing (Edge, Graph, Node, NodeContext, NodeId)
@@ -137,6 +138,12 @@ totalFlow g =
         |> List.map Network.absoluteEdgeFlow
         |> List.sum
 
+
+flowList : SimpleNetwork -> List Float
+flowList g =
+     g
+           |> Graph.edges
+           |> List.map Network.absoluteEdgeFlow
 
 edgeFlow : IntDict EdgeLabel -> Float
 edgeFlow intDict =

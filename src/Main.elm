@@ -222,6 +222,7 @@ init _ =
         ( forces, graph ) =
             Network.setupGraph Network.testGraph
 
+        hiddenGraph : Graph Entity EdgeLabel
         hiddenGraph =
             Graph.mapContexts Network.initializeNode Network.hiddenTestGraph
     in
