@@ -320,7 +320,7 @@ randomTransaction t mr1 mr2 amount graph =
 
 {-| Transfer a given enount from node i to node j
 -}
-makeTransaction : BankTime -> Int -> Int -> Float -> Network -> Network
+makeTransaction : BankTime -> NodeId -> NodeId -> Float -> Network -> Network
 makeTransaction currentBankTime i j amount graph =
     case Graph.get i graph of
         Nothing ->
